@@ -5,11 +5,10 @@ import { getStats, getSubTopic } from '../utils/progress'
 import {
   createRecognition,
   isSpeechSupported,
-  panduSpeak,
-  stopSpeaking,
 } from '../components/Pandu/PanduVoice'
+import { ariaSpeak, stopAria } from '../components/Pandu/AriaVoice'
 import {
-  askLeoPractice,
+  askAriaPractice,
   buildPracticeOpening,
   getPracticeSummary,
   pickPracticeType,
@@ -204,14 +203,14 @@ function PracticeSession({ subTopic }) {
       </section>
 
       {inPractice ? (
-        <LeoPractice moduleId={subTopic.moduleId} timeUp={finished} />
+        <AriaPractice moduleId={subTopic.moduleId} timeUp={finished} />
       ) : (
         <section className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-yellow-100 p-6 shadow-sm">
           <h2 className="text-lg font-bold text-amber-800">
             🎲 Mixed Practice unlocks in the final phase
           </h2>
           <p className="mt-2 leading-relaxed text-amber-900">
-            Finish the Learn and Shadow phases. In the Practice phase, Leo will
+            Finish the Learn and Shadow phases. In the Practice phase, Aria will
             launch a <strong>random</strong> live session — Q&amp;A, a scenario
             card, or a roleplay — and talk with you out loud for 15 minutes.
           </p>
@@ -221,7 +220,7 @@ function PracticeSession({ subTopic }) {
   )
 }
 
-/* ───────────────────────── LEO LIVE PRACTICE ───────────────────────── */
+/* ───────────────────────── ARIA LIVE PRACTICE ───────────────────────── */
 
 function historyFromMessages(messages) {
   return messages.map((m) => ({
@@ -230,16 +229,16 @@ function historyFromMessages(messages) {
   }))
 }
 
-function LeoPractice({ moduleId, timeUp }) {
+function AriaPractice({ moduleId, timeUp }) {
   // Pick the random type + opening line ONCE, when this session mounts.
   const [session] = useState(() => {
     const type = pickPracticeType()
     return { type, opening: buildPracticeOpening(type, moduleId) }
   })
   const [messages, setMessages] = useState(() => [
-    { role: 'leo', text: session.opening },
+    { role: 'aria', text: session.opening },
   ])
-  const [turn, setTurn] = useState('leo-speaking') // leo-speaking|listening|thinking|idle|summary|done|unsupported
+  const [turn, setTurn] = useState('aria-speaking') // aria-speaking|listening|thinking|idle|summary|done|unsupported
   const [interim, setInterim] = useState('')
 
   const messagesRef = useRef(messages)
@@ -312,7 +311,7 @@ function LeoPractice({ moduleId, timeUp }) {
       setMessages((prev) => [...prev, { role: 'user', text }])
       setTurn('thinking')
       const history = historyFromMessages(messagesRef.current)
-      const reply = await askLeoPractice(
+      const reply = await askAriaPractice(
         text,
         session.type,
         moduleId,
@@ -320,23 +319,22 @@ function LeoPractice({ moduleId, timeUp }) {
         history,
       )
       if (endedRef.current) return
-      setMessages((prev) => [...prev, { role: 'leo', text: reply }])
-      setTurn('leo-speaking')
-      panduSpeak(reply, () => {
-        if (!endedRef.current) startListening()
-      })
+      setMessages((prev) => [...prev, { role: 'aria', text: reply }])
+      setTurn('aria-speaking')
+      await ariaSpeak(reply)
+      if (!endedRef.current) startListening()
     }
 
     startListenRef.current = startListening
 
-    // Speak Leo's opening line, then start listening.
-    panduSpeak(session.opening, () => {
+    // Speak Aria's opening line, then start listening.
+    ariaSpeak(session.opening).then(() => {
       if (!endedRef.current) startListening()
     })
 
     return () => {
       endedRef.current = true
-      stopSpeaking()
+      stopAria()
       try {
         recognitionRef.current?.abort()
       } catch {
@@ -349,7 +347,7 @@ function LeoPractice({ moduleId, timeUp }) {
   useEffect(() => {
     if (!timeUp) return
     endedRef.current = true
-    stopSpeaking()
+    stopAria()
     try {
       recognitionRef.current?.abort()
     } catch {
@@ -364,9 +362,9 @@ function LeoPractice({ moduleId, timeUp }) {
       const history = historyFromMessages(messagesRef.current)
       const summary = await getPracticeSummary(getPanduUser(), history)
       if (cancelled) return
-      setMessages((prev) => [...prev, { role: 'leo', text: summary }])
+      setMessages((prev) => [...prev, { role: 'aria', text: summary }])
       setTurn('summary')
-      panduSpeak(summary, () => setTurn('done'))
+      ariaSpeak(summary).then(() => setTurn('done'))
     }
     run()
 
@@ -446,7 +444,7 @@ function ChatBubble({ role, text, ghost }) {
               }
         }
       >
-        {!isUser && <span className="mr-1 font-bold">🦁 Leo:</span>}
+        {!isUser && <span className="mr-1 font-bold">✨ Aria:</span>}
         {text}
       </div>
     </div>
@@ -458,21 +456,21 @@ function StatusIndicator({ turn, onSpeak }) {
     return (
       <p className="text-center text-sm" style={{ color: '#fca5a5' }}>
         🎙️ Voice practice needs a microphone + Chrome/Edge. Open the app in a
-        real browser to talk with Leo.
+        real browser to talk with Aria.
       </p>
     )
   }
-  if (turn === 'leo-speaking' || turn === 'summary') {
+  if (turn === 'aria-speaking' || turn === 'summary') {
     return (
       <p className="text-center text-sm font-semibold" style={{ color: 'var(--color-cyan)' }}>
-        🔊 Leo is speaking…
+        🔊 Aria is speaking…
       </p>
     )
   }
   if (turn === 'thinking') {
     return (
       <p className="text-center text-sm font-semibold" style={{ color: '#c4b5fd' }}>
-        💭 Leo is thinking…
+        💭 Aria is thinking…
       </p>
     )
   }

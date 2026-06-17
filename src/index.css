@@ -1,33 +1,102 @@
 @import "tailwindcss";
 
-/* ── CYBERPUNK COLOR TOKENS ── */
+/* ── Onboarding form inputs — force visible text on dark UI ── */
+.onboarding-input {
+  color: #ffffff !important;
+  background-color: #12121a !important;
+  caret-color: #00e5ff !important;
+  border: 1px solid rgba(0, 229, 255, 0.4) !important;
+  border-radius: 8px !important;
+  padding: 12px 16px !important;
+  font-size: 16px !important;
+  width: 100% !important;
+}
+
+.onboarding-input::placeholder {
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.onboarding-input:focus {
+  border-color: #00e5ff !important;
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.3) !important;
+}
+
+.onboarding-input:-webkit-autofill,
+.onboarding-input:-webkit-autofill:hover,
+.onboarding-input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #ffffff !important;
+  -webkit-box-shadow: 0 0 0px 1000px #12121a inset !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+/* ── COLOR TOKENS — Dark: Rolls Royce Cyberpunk ── */
 :root {
-  --bg-primary:    #0a0a0f;
-  --bg-surface:    #12121a;
-  --bg-card:       #1a1a2e;
-  --color-cyan:    #00f5ff;
-  --color-purple:  #bf00ff;
-  --color-pink:    #ff006e;
-  --color-gold:    #ffd700;
-  --text-primary:  #e2e8f0;
-  --text-muted:    #4a5568;
-  --border-glow:   rgba(0, 245, 255, 0.3);
+  --bg-primary:     #050508;
+  --bg-surface:     #0d0d14;
+  --bg-card:        #111118;
+  --color-cyan:     #00e5ff;
+  --color-purple:   #7c3aed;
+  --color-pink:     #e040fb;
+  --color-gold:     #c9a84c;
+  --color-silver:   #94a3b8;
+  --text-primary:   #f1f5f9;
+  --text-muted:     #64748b;
+  --border-glow:    rgba(0, 229, 255, 0.2);
+  --border-gold:    rgba(201, 168, 76, 0.4);
+  --card-gradient:  linear-gradient(135deg, #111118 0%, #0d0d1f 100%);
+  --nav-bg:         rgba(5, 5, 8, 0.95);
+
+  /* grid spotlight tint (RGB triplet, used with cursor mask) */
+  --grid-rgb: 0, 229, 255;
+
+  /* live cursor position (updated from JS) */
+  --mouse-x: 50%;
+  --mouse-y: 50%;
+
+  /* island card theming (dark defaults; overridden in light mode) */
+  --island-surface: rgba(20, 20, 35, 0.88);
+  --island-text:    #f1f5f9;
+  --island-muted:   #94a3b8;
+  --island-faint:   rgba(255, 255, 255, 0.06);
+  --island-veil:    rgba(5, 5, 8, 0.4);
 }
 
 [data-theme="light"] {
-  --bg-primary:    #f0f4ff;
-  --bg-surface:    #ffffff;
-  --bg-card:       #e8eeff;
-  --color-cyan:    #0066cc;
-  --color-purple:  #7700cc;
-  --color-pink:    #cc0055;
-  --color-gold:    #cc8800;
-  --text-primary:  #0a0a1a;
-  --text-muted:    #64748b;
-  --border-glow:   rgba(0, 102, 204, 0.3);
+  /* Royal Navy + Champagne Gold — no purple. High contrast, readable. */
+  --bg-primary:     #f4efe4;   /* warm cream leather */
+  --bg-surface:     #fffdf8;   /* soft ivory */
+  --bg-card:        #faf4e8;   /* creamy panel */
+  --color-cyan:     #173a5e;   /* deep royal navy (accents/links) */
+  --color-purple:   #0f2747;   /* midnight navy */
+  --color-pink:     #8a5a1c;   /* warm bronze */
+  --color-gold:     #9c7c2a;   /* deep champagne gold */
+  --color-silver:   #7a6a4c;   /* brushed bronze */
+  --text-primary:   #14233d;   /* navy ink — strong contrast on cream */
+  --text-muted:     #6b6048;   /* muted taupe */
+  --border-glow:    rgba(156, 124, 42, 0.30);
+  --border-gold:    rgba(156, 124, 42, 0.5);
+  --card-gradient:  linear-gradient(135deg, #fffdf8 0%, #f6eedd 100%);
+  --nav-bg:         rgba(244, 239, 228, 0.97);
+
+  /* soft champagne grid */
+  --grid-rgb: 190, 162, 110;
+
+  /* island card surface in light mode (cream, not dark) */
+  --island-surface: rgba(255, 251, 243, 0.96);
+  --island-text:    #14233d;
+  --island-muted:   #6b6048;
+  --island-faint:   rgba(120, 100, 60, 0.12);
+  --island-veil:    rgba(244, 239, 228, 0.55);
 }
 
-/* ── ANIMATED GRID BACKGROUND ── */
+/* ── DEPTH GRID BACKGROUND ──
+   Two stacked grid layers create the "depth" effect:
+   1. body::before — a dim grid that is ALWAYS visible (the flat base).
+   2. #grid-spotlight — an identical but BRIGHTER grid that is masked to a
+      soft radial pool centered on the cursor (--mouse-x/--mouse-y, set in JS).
+   The grid itself never moves; only the pool of brightness follows the mouse,
+   so the lines appear to "light up with depth" near the cursor — like the
+   glow falloff around the sun in a solar-system demo. */
 body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
@@ -36,26 +105,58 @@ body {
   overflow-x: hidden;
 }
 
+/* Layer 1 — dim static base grid */
 body::before {
   content: '';
   position: fixed;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
+  inset: 0;
   background-image:
-    linear-gradient(rgba(0, 245, 255, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 245, 255, 0.04) 1px, transparent 1px);
-  background-size: 50px 50px;
-  animation: gridWave 8s ease-in-out infinite;
+    linear-gradient(rgba(var(--grid-rgb), 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(var(--grid-rgb), 0.05) 1px, transparent 1px);
+  background-size: 48px 48px;
   pointer-events: none;
   z-index: 0;
 }
 
-[data-theme="light"] body::before {
+/* Layer 2 — bright grid revealed only inside the cursor light pool */
+#grid-spotlight {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
   background-image:
-    linear-gradient(rgba(0, 102, 204, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 102, 204, 0.06) 1px, transparent 1px);
+    linear-gradient(rgba(var(--grid-rgb), 0.45) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(var(--grid-rgb), 0.45) 1px, transparent 1px);
+  background-size: 48px 48px;
+  /* the radial mask = the pool of light following the cursor */
+  -webkit-mask-image: radial-gradient(
+    260px circle at var(--mouse-x) var(--mouse-y),
+    rgba(0, 0, 0, 0.9) 0%,
+    rgba(0, 0, 0, 0.35) 45%,
+    transparent 75%
+  );
+  mask-image: radial-gradient(
+    260px circle at var(--mouse-x) var(--mouse-y),
+    rgba(0, 0, 0, 0.9) 0%,
+    rgba(0, 0, 0, 0.35) 45%,
+    transparent 75%
+  );
+  transition: background-color 0.3s ease;
 }
 
+/* Layer 3 — soft glow halo right under the cursor (adds the "sun depth") */
+#grid-spotlight::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    420px circle at var(--mouse-x) var(--mouse-y),
+    rgba(var(--grid-rgb), 0.08) 0%,
+    transparent 65%
+  );
+}
+
+/* top ambient glow */
 body::after {
   content: '';
   position: fixed;
@@ -63,11 +164,19 @@ body::after {
   width: 100%; height: 40%;
   background: radial-gradient(
     ellipse at 50% 0%,
-    rgba(191, 0, 255, 0.12) 0%,
+    rgba(124, 58, 237, 0.12) 0%,
     transparent 70%
   );
   pointer-events: none;
   z-index: 0;
+}
+
+[data-theme="light"] body::after {
+  background: radial-gradient(
+    ellipse at 50% 0%,
+    rgba(184, 134, 11, 0.08) 0%,
+    transparent 70%
+  );
 }
 
 #root {
@@ -75,17 +184,45 @@ body::after {
   z-index: 1;
 }
 
-@keyframes gridWave {
-  0%, 100% { transform: translateY(0px); opacity: 1; }
-  50%       { transform: translateY(-10px); opacity: 0.7; }
+/* ── CURSOR RIPPLE ── */
+.cursor-ripple {
+  position: fixed;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  pointer-events: none;
+  z-index: 9999;
+  animation: rippleExpand 0.6s ease-out forwards;
+  transform: translate(-50%, -50%);
+}
+
+[data-theme="light"] .cursor-ripple {
+  border-color: rgba(184, 134, 11, 0.4);
+}
+
+@keyframes rippleExpand {
+  0%   { width: 0px;   height: 0px;   opacity: 0.8; }
+  100% { width: 80px;  height: 80px;  opacity: 0;   }
 }
 
 /* ── GLOW UTILITIES ── */
 .glow-cyan   { box-shadow: 0 0 20px rgba(0, 245, 255, 0.4); }
 .glow-purple { box-shadow: 0 0 20px rgba(191, 0, 255, 0.4); }
 .glow-pink   { box-shadow: 0 0 20px rgba(255, 0, 110, 0.4); }
-.text-glow-cyan { text-shadow: 0 0 10px rgba(0, 245, 255, 0.8); }
-.text-glow-gold { text-shadow: 0 0 10px rgba(255, 215, 0, 0.8); }
+.text-glow-cyan { text-shadow: 0 0 10px rgba(0, 229, 255, 0.8); }
+.text-glow-gold { text-shadow: 0 0 10px rgba(201, 168, 76, 0.8); }
+[data-theme="light"] .text-glow-cyan { text-shadow: 0 0 12px rgba(168, 132, 44, 0.45); }
+[data-theme="light"] .text-glow-gold { text-shadow: 0 0 12px rgba(168, 132, 44, 0.5); }
+
+/* ── PREMIUM NAV GLASS ── */
+.nav-glass {
+  background: var(--nav-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--border-gold);
+}
+[data-theme="light"] .nav-glass {
+  box-shadow: 0 2px 20px rgba(184, 134, 11, 0.1);
+}
 
 /* ── NAV LINKS ── */
 .nav-link {
@@ -99,37 +236,96 @@ body::after {
   color: #0a0a0f;
   background: linear-gradient(135deg, var(--color-cyan), var(--color-purple));
 }
+/* Light mode: gold pill + navy text so the active link is clearly visible */
+[data-theme="light"] .nav-link-active {
+  color: #14233d;
+  background: linear-gradient(135deg, #d4af37, #b8902f);
+  box-shadow: 0 2px 10px rgba(156, 124, 42, 0.35);
+}
+[data-theme="light"] .nav-link:not(.nav-link-active) {
+  color: var(--text-primary);
+}
+[data-theme="light"] .nav-link:not(.nav-link-active):hover {
+  color: var(--color-gold);
+}
 
-/* ── CARD STYLE ── */
+/* ── CARD STYLE — carbon + Rolls Royce gold trim ── */
 .cyber-card {
-  background: var(--bg-card);
+  background: var(--card-gradient);
   border: 1px solid var(--border-glow);
-  border-radius: 12px;
+  border-radius: 16px;
+  position: relative;
+  overflow: hidden;
   transition: all 0.3s ease;
+}
+/* gold accent top line — like Rolls Royce trim */
+.cyber-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 10%; right: 10%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--color-gold), transparent);
+  opacity: 0.6;
 }
 .cyber-card:hover {
   border-color: var(--color-cyan);
-  box-shadow: 0 0 25px rgba(0, 245, 255, 0.2);
-  transform: translateY(-2px);
+  box-shadow:
+    0 0 30px rgba(0, 229, 255, 0.15),
+    0 20px 40px rgba(0, 0, 0, 0.5);
+  transform: translateY(-3px);
+}
+
+[data-theme="light"] .cyber-card {
+  border: 1px solid var(--border-gold);
+  box-shadow:
+    0 2px 20px rgba(184, 134, 11, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+[data-theme="light"] .cyber-card::before {
+  background: linear-gradient(90deg, transparent, rgba(184, 134, 11, 0.8), transparent);
+}
+[data-theme="light"] .cyber-card:hover {
+  border-color: var(--color-gold);
+  box-shadow:
+    0 0 25px rgba(184, 134, 11, 0.2),
+    0 15px 35px rgba(0, 0, 0, 0.08);
 }
 
 /* ── BUTTON STYLES ── */
 .btn-cyber {
-  background: linear-gradient(135deg, var(--color-cyan), var(--color-purple));
-  color: #0a0a0f;
+  background: linear-gradient(135deg, var(--color-cyan) 0%, var(--color-purple) 100%);
+  color: #ffffff;
   font-weight: 700;
+  letter-spacing: 0.05em;
   border: none;
-  border-radius: 8px;
-  padding: 10px 20px;
+  border-radius: 10px;
+  padding: 12px 24px;
   cursor: pointer;
   transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(124, 58, 237, 0.3);
 }
 .btn-cyber:hover {
-  box-shadow: 0 0 20px rgba(0, 245, 255, 0.5);
-  transform: scale(1.03);
+  box-shadow:
+    0 0 25px rgba(0, 229, 255, 0.4),
+    0 8px 25px rgba(124, 58, 237, 0.4);
+  transform: translateY(-2px) scale(1.02);
 }
 
-/* ── PROGRESS BAR ── */
+/* Light mode: champagne-gold button with deep navy text — high contrast */
+[data-theme="light"] .btn-cyber {
+  background: linear-gradient(135deg, #d4af37 0%, #b8902f 100%);
+  color: #14233d;
+  text-shadow: none;
+  box-shadow: 0 4px 14px rgba(156, 124, 42, 0.35);
+}
+[data-theme="light"] .btn-cyber:hover {
+  background: linear-gradient(135deg, #e0bd4a 0%, #c79a33 100%);
+  box-shadow:
+    0 0 22px rgba(212, 175, 55, 0.5),
+    0 8px 22px rgba(156, 124, 42, 0.35);
+}
+
+/* ── PROGRESS BAR — gold XP ── */
 .progress-cyber {
   background: var(--bg-surface);
   border-radius: 999px;
@@ -137,11 +333,15 @@ body::after {
   height: 8px;
 }
 .progress-cyber-fill {
-  background: linear-gradient(90deg, var(--color-cyan), var(--color-purple));
+  background: linear-gradient(90deg, var(--color-gold), var(--color-cyan));
   height: 100%;
   border-radius: 999px;
   transition: width 0.6s ease;
-  box-shadow: 0 0 8px var(--color-cyan);
+  box-shadow: 0 0 10px var(--color-gold);
+}
+[data-theme="light"] .progress-cyber-fill {
+  background: linear-gradient(90deg, #b8860b, #ffd700);
+  box-shadow: 0 0 8px rgba(184, 134, 11, 0.5);
 }
 
 /* ── PANDU/LEO ANIMATIONS ── */
@@ -154,6 +354,18 @@ body::after {
   0%, 100% { transform: scale(1);   opacity: 0.8; }
   50%       { transform: scale(1.5); opacity: 0.3; }
 }
+/* mic button pulse — pulses scale + glow WITHOUT fading the button away */
+@keyframes micPulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 16px rgba(224, 64, 251, 0.5);
+  }
+  50% {
+    transform: scale(1.08);
+    box-shadow: 0 0 28px rgba(224, 64, 251, 0.85);
+  }
+}
+
 .pandu-wave { position: absolute; border-radius: 50%; animation: panduPulse 2s ease-out infinite; }
 .pandu-wave:nth-child(2) { animation-delay: 0.5s; }
 .pandu-wave-speak { animation: panduSpeak 1s ease-in-out infinite; }
@@ -173,89 +385,71 @@ body::after {
   animation-fill-mode: forwards;
 }
 
-/* ── WORLD MAP OCEAN ── */
-.world-ocean {
+/* ── LINEAR WORLD MAP CAROUSEL ── */
+.island-stage {
   position: relative;
   width: 100%;
-  min-height: 600px;
-  border-radius: 16px;
+  max-width: 760px;
   overflow: hidden;
-  border: 1px solid var(--border-glow);
-  background:
-    repeating-linear-gradient(
-      115deg,
-      transparent 0 22px,
-      rgba(0, 245, 255, 0.02) 22px 24px
-    ),
-    linear-gradient(180deg, #0a0f1a 0%, #0d1b2a 50%, #0a1628 100%);
-  animation: oceanWave 16s linear infinite;
 }
-@keyframes oceanWave {
-  from { background-position: 0 0, 0 0; }
-  to   { background-position: 80px 0, 0 0; }
+.island-track {
+  display: flex;
+  /* center the first slot (slot half-width = 160px) within the stage */
+  padding-left: calc(50% - 160px);
+  padding-right: calc(50% - 160px);
+  transition: transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
-
-/* faint grid lines on the ocean */
-.world-ocean::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(0, 245, 255, 1) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0, 245, 255, 1) 1px, transparent 1px);
-  background-size: 44px 44px;
-  opacity: 0.05;
-  pointer-events: none;
+.island-slot {
+  flex: 0 0 320px;
+  width: 320px;
+  display: flex;
+  justify-content: center;
+  padding: 8px;
+  transition: opacity 0.45s ease, filter 0.45s ease, transform 0.45s ease;
+}
+.island-slot .island-card {
+  width: 100%;
+  max-width: 400px;
+}
+@media (max-width: 640px) {
+  .island-stage { max-width: 90vw; }
 }
 
-/* scattered decorative stars */
-.world-ocean::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-repeat: no-repeat;
-  background-image:
-    radial-gradient(2px 2px at 12% 22%, rgba(255, 255, 255, 0.6), transparent),
-    radial-gradient(1.5px 1.5px at 30% 65%, rgba(0, 245, 255, 0.6), transparent),
-    radial-gradient(2px 2px at 48% 16%, rgba(255, 255, 255, 0.5), transparent),
-    radial-gradient(1.5px 1.5px at 66% 82%, rgba(191, 0, 255, 0.6), transparent),
-    radial-gradient(2px 2px at 80% 34%, rgba(255, 255, 255, 0.55), transparent),
-    radial-gradient(1.5px 1.5px at 92% 58%, rgba(0, 245, 255, 0.5), transparent),
-    radial-gradient(1.5px 1.5px at 22% 88%, rgba(255, 255, 255, 0.45), transparent),
-    radial-gradient(2px 2px at 58% 48%, rgba(255, 255, 255, 0.4), transparent),
-    radial-gradient(1.5px 1.5px at 40% 38%, rgba(0, 245, 255, 0.45), transparent),
-    radial-gradient(2px 2px at 74% 12%, rgba(255, 255, 255, 0.5), transparent);
-  animation: oceanTwinkle 4s ease-in-out infinite;
-}
-@keyframes oceanTwinkle {
-  0%, 100% { opacity: 0.85; }
-  50%      { opacity: 0.4; }
-}
-
-/* ── ISLAND CARDS ── */
-/* Fixed dark surface so islands stay readable on the always-dark ocean
-   regardless of the app's light/dark theme. */
+/* ── ISLAND CARDS — theme-aware surface ── */
 .island-card {
-  background: rgba(20, 20, 35, 0.88);
+  background: var(--island-surface);
   border: 1px solid var(--border-glow);
-  border-radius: 12px;
+  border-radius: 14px;
   transition: all 0.3s ease;
 }
+/* light mode: cream-leather panel with gold trim + inner highlight */
+[data-theme="light"] .island-card {
+  border-color: var(--border-gold);
+  box-shadow:
+    0 2px 18px rgba(168, 132, 44, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
 .island-card-link:hover {
-  border-color: var(--color-cyan);
-  box-shadow: 0 0 25px rgba(0, 245, 255, 0.3);
+  border-color: var(--color-gold);
+  box-shadow: 0 0 25px rgba(201, 168, 76, 0.3);
   transform: translateY(-3px);
 }
 .island-complete {
   border-color: var(--color-gold);
-  box-shadow: 0 0 22px rgba(255, 215, 0, 0.35);
+  box-shadow: 0 0 22px rgba(201, 168, 76, 0.4);
 }
 .island-active {
   border-color: var(--color-purple);
   animation: islandPulse 2.2s ease-in-out infinite;
 }
 @keyframes islandPulse {
-  0%, 100% { box-shadow: 0 0 14px rgba(191, 0, 255, 0.45); }
-  50%      { box-shadow: 0 0 30px rgba(191, 0, 255, 0.85); }
+  0%, 100% { box-shadow: 0 0 14px rgba(124, 58, 237, 0.4); }
+  50%      { box-shadow: 0 0 30px rgba(124, 58, 237, 0.75); }
+}
+[data-theme="light"] .island-active {
+  animation: islandPulseLight 2.2s ease-in-out infinite;
+}
+@keyframes islandPulseLight {
+  0%, 100% { box-shadow: 0 0 14px rgba(168, 132, 44, 0.35); }
+  50%      { box-shadow: 0 0 30px rgba(168, 132, 44, 0.7); }
 }

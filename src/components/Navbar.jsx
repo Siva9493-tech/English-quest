@@ -8,13 +8,7 @@ const links = [
 
 export default function Navbar({ theme, onToggleTheme }) {
   return (
-    <nav
-      className="sticky top-0 z-50 flex items-center gap-2 px-6 py-3 backdrop-blur-md"
-      style={{
-        background: 'color-mix(in srgb, var(--bg-surface) 80%, transparent)',
-        borderBottom: '1px solid var(--border-glow)',
-      }}
-    >
+    <nav className="nav-glass sticky top-0 z-50 flex items-center gap-2 px-6 py-3">
       <span
         className="text-glow-cyan mr-4 text-lg font-extrabold tracking-wide"
         style={{ color: 'var(--color-cyan)' }}
@@ -41,13 +35,38 @@ export default function Navbar({ theme, onToggleTheme }) {
         type="button"
         onClick={onToggleTheme}
         aria-label="Toggle dark and light mode"
-        className="ml-auto flex h-9 w-9 items-center justify-center rounded-lg text-lg transition-transform hover:scale-110"
+        title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        className="ml-auto flex shrink-0 items-center rounded-full transition-all hover:scale-105"
         style={{
+          width: 64,
+          height: 32,
+          padding: 3,
           background: 'var(--bg-card)',
-          border: '1px solid var(--border-glow)',
+          border: `1px solid ${
+            theme === 'dark' ? 'var(--color-cyan)' : 'var(--color-gold)'
+          }`,
+          boxShadow:
+            theme === 'dark'
+              ? '0 0 10px var(--border-glow)'
+              : '0 0 10px var(--border-gold)',
+          justifyContent: theme === 'dark' ? 'flex-start' : 'flex-end',
         }}
       >
-        {theme === 'dark' ? '🌙' : '☀️'}
+        <span
+          className="flex h-6 w-6 items-center justify-center rounded-full text-sm"
+          style={{
+            background:
+              theme === 'dark'
+                ? 'linear-gradient(135deg, var(--color-cyan), var(--color-purple))'
+                : 'linear-gradient(135deg, var(--color-gold), #ffd700)',
+            boxShadow:
+              theme === 'dark'
+                ? '0 0 8px var(--border-glow)'
+                : '0 0 8px var(--border-gold)',
+          }}
+        >
+          {theme === 'dark' ? '🌙' : '☀️'}
+        </span>
       </button>
     </nav>
   )

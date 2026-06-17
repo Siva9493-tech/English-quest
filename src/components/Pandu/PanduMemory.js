@@ -5,6 +5,7 @@ const KEYS = {
   position: 'panduPosition', // button corner preference
   history: 'panduHistory', // array of {role, content, timestamp, date}
   wordLog: 'panduWordLog', // array of words of the day already given
+  corrections: 'ariaCorrections', // array of {wrong, correct, date, count}
 }
 
 export function isPanduSetup() {
@@ -17,7 +18,13 @@ export function isPanduSetup() {
 
 export function getPanduUser() {
   try {
-    return JSON.parse(localStorage.getItem(KEYS.user))
+    const data = localStorage.getItem('panduUser')
+    if (!data) return null
+    const parsed = JSON.parse(data)
+    if (!parsed || !parsed.name || parsed.name.trim() === '') {
+      return null
+    }
+    return parsed
   } catch {
     return null
   }
@@ -26,8 +33,10 @@ export function getPanduUser() {
 export function savePanduUser(user) {
   try {
     localStorage.setItem(KEYS.user, JSON.stringify(user))
-  } catch {
-    // ignore write failures
+    return true
+  } catch (error) {
+    console.error('Failed to save user data:', error)
+    return false
   }
 }
 
@@ -106,5 +115,61 @@ export function addWordToLog(word) {
     localStorage.setItem(KEYS.wordLog, JSON.stringify(log))
   } catch {
     // ignore write failures
+  }
+}
+
+/* ───────────────────────── CORRECTION HISTORY ───────────────────────── */
+
+// Save a correction to history.
+export function saveCorrection(wrong, correct, date) {
+  try {
+    const corrections = getCorrections()
+    corrections.push({
+      wrong,
+      correct,
+      date: date || new Date().toDateString(),
+      count: 1,
+    })
+    // Keep only the last 50 corrections.
+    const trimmed = corrections.slice(-50)
+    localStorage.setItem(KEYS.corrections, JSON.stringify(trimmed))
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+// Get all corrections.
+export function getCorrections() {
+  try {
+    return JSON.parse(localStorage.getItem(KEYS.corrections)) || []
+  } catch {
+    return []
+  }
+}
+
+// Get corrections logged today.
+export function getTodayCorrections() {
+  try {
+    const all = getCorrections()
+    const today = new Date().toDateString()
+    return all.filter((c) => c.date === today)
+  } catch {
+    return []
+  }
+}
+
+// Get the most repeated mistake.
+export function getTopMistake() {
+  try {
+    const all = getCorrections()
+    if (all.length === 0) return null
+    const counts = {}
+    all.forEach((c) => {
+      counts[c.wrong] = (counts[c.wrong] || 0) + 1
+    })
+    const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]
+    return top ? { word: top[0], count: top[1] } : null
+  } catch {
+    return null
   }
 }

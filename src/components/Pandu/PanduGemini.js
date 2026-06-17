@@ -1,96 +1,186 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
+// Aria's brain — powered by Groq (OpenAI-compatible chat completions API).
+// (File name kept as PanduGemini.js so existing imports keep working.)
 
-const API_KEY = import.meta.env.VITE_GEMINI_API_KEY
+import { getCorrections } from './PanduMemory'
 
-// Build the dynamic system prompt from user + progress + history.
-export function buildSystemPrompt(userData, progressData, conversationHistory) {
-  const name = userData?.name || 'there'
-  const nickname = userData?.nickname || 'friend'
-  const personality = userData?.personality || 'Friendly & Warm'
-  const completed = progressData?.completedCount ?? 0
-  const total = progressData?.totalCount ?? 76
-  const currentModule =
-    progressData?.nextSubTopic?.moduleTitle || 'General English'
+const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
+const MODEL = 'llama-3.3-70b-versatile'
 
-  const recent = (conversationHistory || [])
-    .slice(-20)
-    .map((m) => `${m.role === 'user' ? name : 'Leo'}: ${m.content}`)
-    .join('\n')
+// Startup diagnostic.
+console.log(
+  'Groq API Key loaded:',
+  GROQ_API_KEY
+    ? 'YES (length: ' + GROQ_API_KEY.length + ')'
+    : 'NO - KEY MISSING',
+)
 
-  return `You are Leo, a friendly English speaking coach.
-Your personality is: ${personality}.
-You are speaking to ${name}. Call them "${nickname}".
+// Low-level call: send a messages[] array to Groq, return the reply text.
+async function chatCompletion(messages, { maxTokens = 150, temperature = 0.8 } = {}) {
+  const response = await fetch(GROQ_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${GROQ_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      messages,
+      max_tokens: maxTokens,
+      temperature,
+    }),
+  })
 
-IMPORTANT RULES:
-- You speak ONLY in English. Never switch to Telugu, Hindi, or any other language.
-- You are voice-only. Keep responses under 3 sentences unless explaining something important.
-- You have a warm, natural female voice personality — never robotic, never stiff.
-- You remember the user's progress. They have completed ${completed} out of ${total} subtopics.
-- Today's focus module is: ${currentModule}.
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}))
+    console.error('Groq error:', err)
+    throw new Error(err.error?.message || `HTTP ${response.status}`)
+  }
 
-YOUR DAILY ROUTINE with the user:
-1. Start with a warm greeting mentioning their name and one thing they did well recently.
-2. Give them the Word of the Day — one useful business/daily word, its meaning, and one example sentence. Make it conversational.
-3. Have a short English conversation on today's module topic.
-4. Gently correct mistakes INLINE like this: (✏️ try saying "I have been" instead of "I am been") — never make them feel bad.
-5. Track: pace (too fast/slow?), pronunciation issues, slang usage, filler words like "um" and "uh".
-6. End a session with 3 specific things they did well and 1 thing to improve tomorrow.
-
-PERSONALITY NOTES for ${personality}:
-- "Friendly & Warm": casual, use words like "awesome", "you're doing great!", add occasional emoji in text.
-- "Matured & Professional": clear diction, structured feedback, like a seasoned female coach.
-- "Fun & Energetic": high energy, uses mild slang, very encouraging, celebrates small wins loudly.
-
-RECENT CONVERSATION:
-${recent || '(no previous messages yet)'}`
+  const data = await response.json()
+  const reply = data.choices?.[0]?.message?.content
+  return reply ? reply.trim() : ''
 }
 
-// Convert stored history into a valid, strictly-alternating Gemini history
-// that starts with a user turn and ends before the new user message.
-function toGeminiHistory(history) {
-  const mapped = (history || [])
-    .filter((m) => m.role === 'user' || m.role === 'model')
-    .map((m) => ({ role: m.role, parts: [{ text: String(m.content || '') }] }))
+// Conversation mode flag - passed from index.jsx to enable continuous mode
+let isConversationMode = false
 
-  while (mapped.length && mapped[0].role !== 'user') mapped.shift()
-
-  const out = []
-  for (const m of mapped) {
-    const last = out[out.length - 1]
-    if (last && last.role === m.role) {
-      last.parts[0].text += '\n' + m.parts[0].text
-    } else {
-      out.push({ role: m.role, parts: [{ text: m.parts[0].text }] })
-    }
-  }
-  if (out.length && out[out.length - 1].role === 'user') out.pop()
-  return out
+export function setConversationMode(enabled) {
+  isConversationMode = enabled
 }
 
 export async function askPandu(userMessage, userData, progressData, history) {
-  if (!API_KEY) {
-    return "I can't reach my brain right now — the Gemini API key isn't set up yet."
-  }
-
   try {
-    const genAI = new GoogleGenerativeAI(API_KEY)
-    const systemPrompt = buildSystemPrompt(userData, progressData, history)
+    if (!GROQ_API_KEY) {
+      return 'Aria needs an API key. Check your .env file for VITE_GROQ_API_KEY'
+    }
 
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
-      systemInstruction: systemPrompt,
+    const name = userData?.name || 'friend'
+    const nickname = userData?.nickname || userData?.name || 'friend'
+    const progress = progressData || 'beginner'
+
+    // Pull recent corrections so Aria remembers what to watch for.
+    const recentCorrections = getCorrections()
+      .slice(-5)
+      .map((c) => `"${c.wrong}" → "${c.correct}"`)
+      .join(', ')
+    const correctionContext = recentCorrections
+      ? `\nRecent mistakes to watch: ${recentCorrections}`
+      : ''
+
+    const basePrompt = `You are Aria, a warm friendly female English coach talking to ${name}.
+ALWAYS refer to them as "${nickname}" — this is what they want to be called. Use "${nickname}" naturally and often; never use their full name, and don't go a whole reply addressing them only as "you" without warming it up with "${nickname}".
+
+CONVERSATION STYLE:
+- Chat naturally and warmly first
+- You are like a smart older sister, not a teacher
+- Keep replies under 3 sentences
+- Always end with a follow up question
+- Never repeat what the user just said
+- Use contractions: you're, it's, don't, won't
+- Use casual connectors: "Right,", "Oh nice,", "Got it,"
+
+CORRECTION SYSTEM (follow strictly):
+1. CHAT FIRST — always respond to what user said naturally and completely first
+2. CORRECT AFTER — only at the very END of your reply, add ONE correction max
+3. CORRECTION FORMAT — use this exact style:
+   [💡 ${nickname}, quick tip: instead of "wrong phrase" → try "correct phrase" next time!]
+4. SKIP CORRECTION if the mistake is minor or if you already corrected something similar in the last 3 messages
+5. PATTERN ALERT — after every 5 messages, if you noticed a repeated mistake, say:
+   [📊 Pattern spotted: You often mix up "X" and "Y" — let's watch that!]
+6. NEVER correct more than once per reply
+7. NEVER use the pencil emoji ✏️ ALWAYS use 💡 for tips
+8. PRAISE good sentences naturally: "Love how you said that!", "That was perfect!", "Great sentence structure!"
+
+FILLER WORD AWARENESS:
+If user uses um/uh/like/you know more than twice in one message, gently mention ONCE:
+[🎯 Tip: Try to replace "um" with a short pause — it sounds more confident!]
+
+TOPICS YOU CAN DISCUSS:
+- English practice for current module: ${progress}
+- General chat: weather, news, daily life, career
+- Indian context: Bollywood, cricket, tech, food
+- Anything the user brings up naturally
+
+WHAT YOU NEVER DO:
+- Never say "Certainly!" or "Absolutely!"
+- Never start with "Great question!"
+- Never be formal or stiff
+- Never correct twice in one reply
+- Never make user feel bad about mistakes${correctionContext}`
+
+    const conversationModePrompt = isConversationMode ? `
+CONVERSATION MODE RULES:
+- This is a LIVE voice conversation, not a chat
+- Keep ALL replies under 3 sentences maximum
+- Never use bullet points or lists — speak naturally
+- Use contractions: you're, it's, don't, won't
+- Add natural conversation connectors: "Right,", "Yeah,", "Okay so,", "Got it,"
+- After answering, ALWAYS end with either:
+  a) A follow-up question to keep conversation going
+  b) A short prompt like "Your turn!" or "Go ahead!"
+  c) "What do you think?" to invite response
+- This keeps the conversation flowing naturally
+
+CORRECTION RULES (strict):
+- If you notice a grammar mistake, mention it ONLY at the very END of your reply in brackets like this: [💡 tip: say 'correct version' next time]
+- Never interrupt your reply mid-sentence with corrections. Keep it encouraging not critical.
+- Only correct if the mistake is significant; max ONE per reply
+- Never correct the same mistake twice in a session
+- Never correct filler words more than once per session
+
+ENERGY RULES:
+- Match user's energy level
+- If they sound confused → slow down, be gentle
+- If they sound confident → be more casual and fun
+- If they make good progress → celebrate it!
+  "That was perfect!", "Love that!", "Nailed it!"
+
+TOPICS:
+- English practice for current module
+- General conversation — weather, news, life, career
+- Indian context is totally fine
+- Bollywood, cricket, tech, startup culture = all good` : ''
+
+    const systemPrompt = basePrompt + conversationModePrompt
+
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...(history?.slice(-10).map((h) => ({
+        role: h.role === 'user' ? 'user' : 'assistant',
+        content: h.content,
+      })) || []),
+      { role: 'user', content: userMessage },
+    ]
+
+    const response = await fetch(GROQ_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${GROQ_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        messages,
+        max_tokens: 150,
+        temperature: 0.8,
+      }),
     })
 
-    const chat = model.startChat({
-      history: toGeminiHistory(history),
-      generationConfig: { maxOutputTokens: 200 },
-    })
+    if (!response.ok) {
+      const err = await response.json()
+      console.error('Groq error:', err)
+      return `Aria error: ${err.error?.message || 'something went wrong'}`
+    }
 
-    const result = await chat.sendMessage(userMessage)
-    return result.response.text().trim()
-  } catch (err) {
-    console.error('Leo Gemini error:', err)
-    return "Hmm, I had trouble thinking just now. Could you say that again?"
+    const data = await response.json()
+    const reply = data.choices?.[0]?.message?.content
+
+    if (!reply) return "Hmm, I didn't catch that. Could you say that again?"
+    return reply.trim()
+  } catch (error) {
+    console.error('Aria fetch error:', error)
+    return `Connection error: ${error.message}`
   }
 }
 
@@ -298,7 +388,7 @@ export function getPracticeScenario(moduleId) {
   return PRACTICE_SCENARIOS[moduleId] || PRACTICE_SCENARIOS.default
 }
 
-// Leo's opening line, announcing the chosen mode (per the required formats).
+// Aria's opening line, announcing the chosen mode (per the required formats).
 export function buildPracticeOpening(type, moduleId) {
   const scenario = getPracticeScenario(moduleId)
   if (type === 'qa') {
@@ -322,68 +412,69 @@ function buildPracticeSystemPrompt(type, scenario, userData) {
     roleplay: `MODE: Roleplay. Stay fully in character as ${scenario.roleplay?.character}. Keep a natural back-and-forth conversation going for the whole session. Only break character for tiny inline corrections.`,
   }
 
-  return `You are Leo, a warm, encouraging female English speaking coach running a LIVE practice session with ${nickname}.
+  return `You are Aria, a warm, encouraging female English speaking coach running a LIVE practice session with ${nickname}. You have warm, natural energy like a smart older sister who is also a coach.
 Personality: ${personality}.
 ${modeLines[type] || modeLines.qa}
 
 RULES:
 - English only. This is VOICE — keep every reply under 3 sentences.
-- Correct mistakes GENTLY and INLINE like this: (✏️ try: "I would have" instead of "I would of"). Never lecture.
-- Be specific and warm. React to what the user actually said.`
+- If you notice a grammar mistake, mention it ONLY at the very END of your reply in brackets like this: [💡 tip: say 'correct version' next time]. Never interrupt your reply mid-sentence with corrections. Keep it encouraging not critical.
+- Be specific and warm. React to what the user actually said.
+- Speak in a warm, natural way. Use contractions like 'you're', 'it's', 'don't' — never formal stiff sentences. Your voice has natural pauses.`
 }
 
-export async function askLeoPractice(userMessage, type, moduleId, userData, history) {
-  if (!API_KEY) {
+// Map stored history ({role:'user'|'model', content}) to OpenRouter messages.
+function toChatMessages(history) {
+  return (history || [])
+    .filter((m) => m.role === 'user' || m.role === 'model')
+    .slice(-10)
+    .map((m) => ({
+      role: m.role === 'user' ? 'user' : 'assistant',
+      content: String(m.content || ''),
+    }))
+}
+
+export async function askAriaPractice(userMessage, type, moduleId, userData, history) {
+  if (!GROQ_API_KEY) {
     return "My AI brain isn't connected right now, but keep going out loud — you're doing great!"
   }
   try {
-    const genAI = new GoogleGenerativeAI(API_KEY)
     const scenario = getPracticeScenario(moduleId)
     const systemPrompt = buildPracticeSystemPrompt(type, scenario, userData)
 
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
-      systemInstruction: systemPrompt,
-    })
-
-    const chat = model.startChat({
-      history: toGeminiHistory(history),
-      generationConfig: { maxOutputTokens: 200 },
-    })
-
-    const result = await chat.sendMessage(userMessage)
-    return result.response.text().trim()
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...toChatMessages(history),
+      { role: 'user', content: userMessage },
+    ]
+    const reply = await chatCompletion(messages, { maxTokens: 200 })
+    return reply || 'Hmm, I missed that. Could you say it once more?'
   } catch (err) {
-    console.error('Leo practice error:', err)
+    console.error('Aria practice error:', err)
     return 'Hmm, I missed that. Could you say it once more?'
   }
 }
 
 // End-of-session wrap-up: exactly 2 wins + 1 improvement.
 export async function getPracticeSummary(userData, history) {
-  if (!API_KEY) {
+  if (!GROQ_API_KEY) {
     return 'Great session! Two wins: you kept speaking and you stayed in English the whole time. One thing to improve: slow down a touch on longer sentences. See you tomorrow!'
   }
   try {
-    const genAI = new GoogleGenerativeAI(API_KEY)
-    const systemPrompt = `You are Leo wrapping up an English practice session. In under 4 warm sentences, give EXACTLY 2 specific things the user did well and 1 specific thing to improve next time. Speak directly to them.`
+    const systemPrompt = `You are Aria wrapping up an English practice session. In under 4 warm sentences, give EXACTLY 2 specific things the user did well and 1 specific thing to improve next time. Speak directly to them. Speak in a warm, natural way. Use contractions like 'you're', 'it's', 'don't' — never formal stiff sentences. Your voice has natural pauses.`
 
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
-      systemInstruction: systemPrompt,
-    })
-
-    const chat = model.startChat({
-      history: toGeminiHistory(history),
-      generationConfig: { maxOutputTokens: 200 },
-    })
-
-    const result = await chat.sendMessage(
-      'The session timer is up. Give me my wrap-up now.',
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...toChatMessages(history),
+      { role: 'user', content: 'The session timer is up. Give me my wrap-up now.' },
+    ]
+    const reply = await chatCompletion(messages, { maxTokens: 200 })
+    return (
+      reply ||
+      'Awesome work today! You spoke with real confidence and used some great vocabulary. Next time, try pausing a little less between ideas. Proud of you!'
     )
-    return result.response.text().trim()
   } catch (err) {
-    console.error('Leo summary error:', err)
+    console.error('Aria summary error:', err)
     return 'Awesome work today! You spoke with real confidence and used some great vocabulary. Next time, try pausing a little less between ideas. Proud of you!'
   }
 }

@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
-import panduIcon from '../../assets/pandu-icon.png'
-import { panduSpeak } from './PanduVoice'
+import AriaAvatar from './AriaAvatar'
+import { ariaSpeak } from './AriaVoice'
 import { savePanduUser } from './PanduMemory'
 
 const NICKNAMES = [
   { value: 'Bro', label: 'Bro 🤝' },
   { value: 'Sis', label: 'Sis 💯' },
   { value: 'Coach', label: 'Coach 🏆' },
-  { value: 'Leo', label: 'Leo 🦁' },
+  { value: 'Aria', label: 'Aria ✨' },
 ]
 
 const PERSONALITIES = [
@@ -33,25 +33,30 @@ export default function PanduOnboarding({ onComplete }) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [nickname, setNickname] = useState('')
+  const [customNickname, setCustomNickname] = useState('')
   const [personality, setPersonality] = useState('')
 
-  // Pandu speaks aloud when the name screen appears.
+  // Aria speaks aloud when the name screen appears.
   useEffect(() => {
-    if (screen === 2) panduSpeak('What should I call you?')
+    if (screen === 2) ariaSpeak('What should I call you?')
   }, [screen])
 
   function finish() {
-    const user = {
-      name: name.trim() || 'Friend',
+    const userData = {
+      name: name.trim(),
       email: email.trim(),
-      nickname: nickname || 'Leo',
+      nickname: nickname || 'friend',
       personality: personality || 'Friendly & Warm',
-      joinedDate: new Date().toDateString(),
+      joinedDate: new Date().toISOString(),
       totalSessions: 0,
       lastSessionDate: null,
     }
-    savePanduUser(user)
-    onComplete(user)
+    const saved = savePanduUser(userData)
+    if (!saved) {
+      alert('Failed to save your profile. Please check browser storage settings and try again.')
+      return
+    }
+    onComplete(userData)
   }
 
   return (
@@ -59,13 +64,9 @@ export default function PanduOnboarding({ onComplete }) {
       <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-2xl">
         {screen === 1 && (
           <div className="space-y-5 text-center">
-            <img
-              src={panduIcon}
-              alt="Leo"
-              className="mx-auto h-20 w-20 rounded-full shadow-lg"
-            />
+            <AriaAvatar size={80} className="mx-auto shadow-lg" />
             <h2 className="text-2xl font-extrabold text-slate-800">
-              Hi! I'm Leo 🦁
+              Hi! I'm Aria ✨
             </h2>
             <p className="text-slate-500">
               Your personal English coach. Let's get to know each other first.
@@ -90,14 +91,36 @@ export default function PanduOnboarding({ onComplete }) {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="What's your name?"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-indigo-500"
+                className="onboarding-input"
+                style={{
+                  color: '#ffffff',
+                  backgroundColor: '#12121a',
+                  border: '1px solid rgba(0, 229, 255, 0.4)',
+                  borderRadius: '8px',
+                  padding: '12px 16px',
+                  fontSize: '16px',
+                  width: '100%',
+                  outline: 'none',
+                  caretColor: '#00e5ff',
+                }}
               />
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Your email? (for future reminders)"
-                className="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-indigo-500"
+                className="onboarding-input"
+                style={{
+                  color: '#ffffff',
+                  backgroundColor: '#12121a',
+                  border: '1px solid rgba(0, 229, 255, 0.4)',
+                  borderRadius: '8px',
+                  padding: '12px 16px',
+                  fontSize: '16px',
+                  width: '100%',
+                  outline: 'none',
+                  caretColor: '#00e5ff',
+                }}
               />
             </div>
             <button
@@ -130,6 +153,35 @@ export default function PanduOnboarding({ onComplete }) {
                 </button>
               ))}
             </div>
+            <p
+              style={{
+                color: 'var(--text-muted)',
+                fontSize: '13px',
+                margin: '12px 0 6px',
+              }}
+            >
+              Or type your own:
+            </p>
+            <input
+              className="onboarding-input"
+              placeholder="Type what Aria should call you..."
+              value={customNickname}
+              onChange={(e) => {
+                setCustomNickname(e.target.value)
+                setNickname(e.target.value)
+              }}
+              style={{
+                color: '#ffffff',
+                backgroundColor: '#12121a',
+                border: '1px solid rgba(0,229,255,0.4)',
+                borderRadius: '8px',
+                padding: '10px 14px',
+                fontSize: '15px',
+                width: '100%',
+                outline: 'none',
+                caretColor: '#00e5ff',
+              }}
+            />
             <p className="text-xs text-slate-400">
               You can always change this later by talking to me.
             </p>
