@@ -2,6 +2,22 @@ import { useEffect, useState } from 'react'
 import AriaAvatar from './AriaAvatar'
 import { ariaSpeak } from './AriaVoice'
 import { savePanduUser } from './PanduMemory'
+import { setUserAccent } from './AccentTrainer'
+
+const ACCENTS = [
+  {
+    id: 'american',
+    flag: '🇺🇸',
+    name: 'American English',
+    desc: 'Hollywood style — awesome, totally, hey!',
+  },
+  {
+    id: 'british',
+    flag: '🇬🇧',
+    name: 'British English',
+    desc: 'Proper British — brilliant, cheers, sorted!',
+  },
+]
 
 const NICKNAMES = [
   { value: 'Bro', label: 'Bro 🤝' },
@@ -35,6 +51,7 @@ export default function PanduOnboarding({ onComplete }) {
   const [nickname, setNickname] = useState('')
   const [customNickname, setCustomNickname] = useState('')
   const [personality, setPersonality] = useState('')
+  const [selectedAccent, setSelectedAccent] = useState('american')
 
   // Aria speaks aloud when the name screen appears.
   useEffect(() => {
@@ -42,15 +59,18 @@ export default function PanduOnboarding({ onComplete }) {
   }, [screen])
 
   function finish() {
+    const accent = selectedAccent || 'american'
     const userData = {
       name: name.trim(),
       email: email.trim(),
       nickname: nickname || 'friend',
       personality: personality || 'Friendly & Warm',
+      accent,
       joinedDate: new Date().toISOString(),
       totalSessions: 0,
       lastSessionDate: null,
     }
+    setUserAccent(accent)
     const saved = savePanduUser(userData)
     if (!saved) {
       alert('Failed to save your profile. Please check browser storage settings and try again.')
@@ -226,11 +246,61 @@ export default function PanduOnboarding({ onComplete }) {
               🎙️
             </p>
             <button
-              onClick={finish}
+              onClick={() => setScreen(5)}
               disabled={!personality}
-              className="w-full rounded-xl bg-emerald-600 py-3 font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40"
+              className="w-full rounded-xl bg-indigo-600 py-3 font-bold text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              Start Learning →
+              Next →
+            </button>
+          </div>
+        )}
+
+        {screen === 5 && (
+          <div className="space-y-4 text-center">
+            <div className="text-4xl">🌍</div>
+            <h2 className="text-xl font-bold text-slate-800">
+              Which accent do you want to learn?
+            </h2>
+            <p className="text-sm text-slate-500">
+              Aria will tune her vocabulary and tips to match
+            </p>
+            <div className="space-y-3 text-left">
+              {ACCENTS.map((option) => (
+                <button
+                  key={option.id}
+                  onClick={() => setSelectedAccent(option.id)}
+                  className={`flex w-full items-center gap-4 rounded-xl border-2 p-4 transition ${
+                    selectedAccent === option.id
+                      ? 'border-indigo-500 bg-indigo-50'
+                      : 'border-slate-200 hover:border-indigo-300'
+                  }`}
+                >
+                  <span className="text-3xl">{option.flag}</span>
+                  <span className="flex-1">
+                    <span
+                      className={`block font-bold ${
+                        selectedAccent === option.id
+                          ? 'text-indigo-700'
+                          : 'text-slate-800'
+                      }`}
+                    >
+                      {option.name}
+                    </span>
+                    <span className="text-sm text-slate-500">
+                      {option.desc}
+                    </span>
+                  </span>
+                  {selectedAccent === option.id && (
+                    <span className="text-xl text-indigo-600">✓</span>
+                  )}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={finish}
+              className="w-full rounded-xl bg-emerald-600 py-3 font-bold text-white transition hover:bg-emerald-700"
+            >
+              Start Learning! 🚀
             </button>
           </div>
         )}

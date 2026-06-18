@@ -6,6 +6,7 @@ import Home from './pages/Home'
 import ModuleMap from './pages/ModuleMap'
 import ModuleDetail from './pages/ModuleDetail'
 import DailyPractice from './pages/DailyPractice'
+import Analytics from './pages/Analytics'
 import { preloadAriaVoice } from './components/Pandu/AriaVoice'
 
 export default function App() {
@@ -100,6 +101,7 @@ export default function App() {
             <Route path="/modules/:moduleId" element={<ModuleDetail />} />
             <Route path="/practice" element={<DailyPractice />} />
             <Route path="/practice/:subtopicId" element={<DailyPractice />} />
+            <Route path="/analytics" element={<Analytics />} />
           </Routes>
         </main>
         <Pandu />

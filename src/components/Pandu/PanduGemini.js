@@ -2,6 +2,8 @@
 // (File name kept as PanduGemini.js so existing imports keep working.)
 
 import { getCorrections } from './PanduMemory'
+import { getAriaMemory, buildMemoryContext } from './AriaMemory'
+import { getUserAccent, buildAccentSystemPrompt } from './AccentTrainer'
 
 const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
@@ -68,6 +70,12 @@ export async function askPandu(userMessage, userData, progressData, history) {
       ? `\nRecent mistakes to watch: ${recentCorrections}`
       : ''
 
+    // Cross-session memory: what Aria remembers about this user over time.
+    const memoryContext = buildMemoryContext(getAriaMemory())
+
+    // Accent training: tune vocabulary, corrections and tips to the user's pick.
+    const accentContext = buildAccentSystemPrompt(getUserAccent())
+
     const basePrompt = `You are Aria, a warm friendly female English coach talking to ${name}.
 ALWAYS refer to them as "${nickname}" — this is what they want to be called. Use "${nickname}" naturally and often; never use their full name, and don't go a whole reply addressing them only as "you" without warming it up with "${nickname}".
 
@@ -107,7 +115,7 @@ WHAT YOU NEVER DO:
 - Never start with "Great question!"
 - Never be formal or stiff
 - Never correct twice in one reply
-- Never make user feel bad about mistakes${correctionContext}`
+- Never make user feel bad about mistakes${correctionContext}${memoryContext}${accentContext}`
 
     const conversationModePrompt = isConversationMode ? `
 CONVERSATION MODE RULES:

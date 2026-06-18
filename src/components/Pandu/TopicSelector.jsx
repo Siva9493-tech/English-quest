@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { getStats } from '../../utils/progress'
+import { getUserAccent, getAccentTopics } from './AccentTrainer'
 
 // Topic pools per module
 const MODULE_TOPICS = {
@@ -89,6 +90,18 @@ export default function TopicSelector({ onSelect, onSkip }) {
   const currentModuleId = stats?.nextSubTopic?.moduleId || 'm1'
 
   const topics = MODULE_TOPICS[currentModuleId] || DEFAULT_TOPICS
+
+  // Accent training topics, namespaced so their ids never clash with the
+  // regular module topics ("t1" vs "accent_a1").
+  const accent = getUserAccent()
+  const accentFlag = accent === 'british' ? '🇬🇧' : '🇺🇸'
+  const accentTopics = getAccentTopics(accent).map((t) => ({
+    ...t,
+    id: 'accent_' + t.id,
+  }))
+
+  // Single lookup table for the Start button across both sections.
+  const allTopics = [...topics, ...accentTopics]
 
   return (
     <div
@@ -226,6 +239,78 @@ export default function TopicSelector({ onSelect, onSkip }) {
               )}
             </button>
           ))}
+
+          {/* Accent Training Section */}
+          <div
+            style={{
+              borderTop: '1px solid var(--border-glow)',
+              paddingTop: '12px',
+              marginTop: '4px',
+            }}
+          >
+            <p
+              style={{
+                color: 'var(--color-cyan)',
+                fontSize: '11px',
+                fontWeight: '700',
+                letterSpacing: '0.1em',
+                margin: '0 0 8px',
+              }}
+            >
+              {accentFlag} ACCENT TRAINING
+            </p>
+            {accentTopics.map((topic) => (
+              <button
+                key={topic.id}
+                onClick={() => setSelected(topic.id)}
+                style={{
+                  background:
+                    selected === topic.id
+                      ? 'rgba(0,229,255,0.15)'
+                      : 'var(--bg-surface)',
+                  border: `1px solid ${
+                    selected === topic.id
+                      ? 'var(--color-cyan)'
+                      : 'var(--border-glow)'
+                  }`,
+                  borderRadius: '12px',
+                  padding: '12px 14px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  textAlign: 'left',
+                  width: '100%',
+                  marginBottom: '8px',
+                  transition: 'all 0.2s ease',
+                }}
+              >
+                <span style={{ fontSize: '24px' }}>{topic.emoji}</span>
+                <div>
+                  <div
+                    style={{
+                      color:
+                        selected === topic.id
+                          ? 'var(--color-cyan)'
+                          : 'var(--text-primary)',
+                      fontWeight: '700',
+                      fontSize: '13px',
+                    }}
+                  >
+                    {topic.title}
+                  </div>
+                  <div
+                    style={{
+                      color: 'var(--text-muted)',
+                      fontSize: '11px',
+                    }}
+                  >
+                    {topic.desc}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Buttons */}
@@ -248,7 +333,7 @@ export default function TopicSelector({ onSelect, onSkip }) {
           </button>
           <button
             onClick={() => {
-              const topic = topics.find((t) => t.id === selected)
+              const topic = allTopics.find((t) => t.id === selected)
               onSelect(topic || topics[0])
             }}
             style={{

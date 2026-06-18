@@ -125,11 +125,16 @@ export function getAriaFeedback(analysis) {
 export class SessionTracker {
   constructor() {
     this.analyses = []
+    this.pronScores = []
     this.startTime = Date.now()
   }
 
   add(analysis) {
     if (analysis) this.analyses.push(analysis)
+  }
+
+  addPronScore(score) {
+    if (score) this.pronScores.push(score)
   }
 
   getSummary() {
@@ -161,6 +166,13 @@ export class SessionTracker {
       paceScore,
       exchanges: this.analyses.length,
       fluencyGrade: getFluencyGrade(avgQuality),
+      avgPronScore:
+        this.pronScores.length > 0
+          ? Math.round(
+              this.pronScores.reduce((a, b) => a + b, 0) /
+                this.pronScores.length,
+            )
+          : null,
     }
   }
 }

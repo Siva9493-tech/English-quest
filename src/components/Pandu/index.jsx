@@ -14,6 +14,10 @@ import {
   saveSessionSummary,
 } from './SpeechAnalyzer'
 import {
+  getPronunciationTip,
+  getPronunciationScore,
+} from './PronunciationScorer'
+import {
   getHistory,
   getPanduUser,
   getRecentHistory,
@@ -22,8 +26,16 @@ import {
   savePanduUser,
   saveCorrection,
   saveMessage,
+  getCorrections,
 } from './PanduMemory'
+import {
+  getAriaMemory,
+  generateOpeningMessage,
+  updateMemoryAfterSession,
+  checkMemoryMilestones,
+} from './AriaMemory'
 import { getStats } from '../../utils/progress'
+import { getUserAccent, getDailyPhrase } from './AccentTrainer'
 
 const PILL_MS = 6000 // keep transcript bubbles visible for 6s
 const SILENCE_MS = 15000 // give up listening after 15s if the user never speaks
@@ -64,6 +76,7 @@ export default function Pandu() {
   const [panduPill, setPanduPill] = useState('')
   const [sessionFillerCount, setSessionFillerCount] = useState(0)
   const [currentAnalysis, setCurrentAnalysis] = useState(null)
+  const [pronScore, setPronScore] = useState(null)
   const [showScorecard, setShowScorecard] = useState(false)
   const [showTopicSelector, setShowTopicSelector] = useState(false)
 
@@ -80,6 +93,8 @@ export default function Pandu() {
   const recognitionRef = useRef(null)
   const pillTimers = useRef({ user: null, pandu: null })
   const trackerRef = useRef(null)
+  // Speech API confidence from the most recent recognized utterance.
+  const lastConfidenceRef = useRef(null)
   // The chosen practice topic for the active session (null = free chat).
   const selectedTopicRef = useRef(null)
 
@@ -188,8 +203,15 @@ export default function Pandu() {
         let final = ''
         for (let i = 0; i < event.results.length; i++) {
           const chunk = event.results[i][0].transcript
-          if (event.results[i].isFinal) final += chunk + ' '
-          else interim += chunk
+          if (event.results[i].isFinal) {
+            final += chunk + ' '
+            // Remember the confidence of the latest final result so the
+            // pronunciation scorer can use it.
+            const conf = event.results[i][0].confidence
+            if (typeof conf === 'number' && conf > 0) {
+              lastConfidenceRef.current = conf
+            }
+          } else interim += chunk
         }
         if (final.trim()) finalText = final.trim()
         showUserPill((final || interim).trim())
@@ -274,6 +296,19 @@ export default function Pandu() {
       setSessionFillerCount((prev) => prev + (analysis?.totalFillers || 0))
       const speechFeedback = getAriaFeedback(analysis)
 
+      // Pronunciation analysis (uses Speech API confidence when available).
+      const confidence = lastConfidenceRef.current
+      const pScore = getPronunciationScore(clean, confidence)
+      setPronScore(pScore)
+      if (trackerRef.current) trackerRef.current.addPronScore(pScore)
+      const pronTip = getPronunciationTip(clean)
+
+      // Only weave ONE feedback note into Aria's reply per turn, picked
+      // at random so tips alternate between speech and pronunciation.
+      const allFeedback = [speechFeedback, pronTip].filter(Boolean)
+      const feedbackToSend =
+        allFeedback[Math.floor(Math.random() * allFeedback.length)] || null
+
       setConvState(STATES.PROCESSING)
       const stats = getStats()
       const topic = selectedTopicRef.current
@@ -284,11 +319,11 @@ export default function Pandu() {
         stats?.nextSubTopic?.moduleTitle || 'General'
       }, Topic: ${topicContext}, XP: ${stats?.earnedXp || 0}`
 
-      // Append any speech feedback so Aria can weave it into her reply.
-      const messageWithFeedback = speechFeedback
+      // Append the chosen feedback so Aria can weave it into her reply.
+      const messageWithFeedback = feedbackToSend
         ? clean +
           '\n[SYSTEM: After your natural reply, also include this feedback: ' +
-          speechFeedback +
+          feedbackToSend +
           ']'
         : clean
 
@@ -360,19 +395,37 @@ export default function Pandu() {
     setSessionSeconds(0)
     setSessionFillerCount(0)
     setCurrentAnalysis(null)
+    setPronScore(null)
+    lastConfidenceRef.current = null
     setSessionActive(true)
     setConversationMode(true)
     recordSession()
 
     const name = userData?.nickname || userData?.name || 'friend'
+    // Free chat uses a memory-aware greeting that references past sessions;
+    // a chosen topic uses a topic-focused opener.
+    const memory = getAriaMemory()
     const greeting = topic
       ? `Hey ${name}! Let's practice "${topic.title}" — ${topic.desc}. I'm listening, go ahead!`
-      : `Hey ${name}! Free chat mode — what's on your mind?`
+      : generateOpeningMessage(memory, name)
 
     appendMessage('model', greeting)
     showPanduPill(greeting)
     setConvState(STATES.SPEAKING)
     await ariaSpeak(greeting)
+
+    // Accent phrase of the day — spoken right after the greeting so it never
+    // overlaps with the live listening loop.
+    if (sessionRef.current) {
+      const dailyPhrase = getDailyPhrase(getUserAccent())
+      const phraseIntro =
+        `Oh, and your ${dailyPhrase.accent} phrase of the day: ` +
+        `"${dailyPhrase.phrase}" — it means ${dailyPhrase.meaning}. ` +
+        `Try using it today!`
+      appendMessage('model', phraseIntro)
+      showPanduPill(phraseIntro)
+      await ariaSpeak(phraseIntro)
+    }
 
     if (sessionRef.current) startConversationLoop()
   }
@@ -380,6 +433,8 @@ export default function Pandu() {
   async function endSession(farewell) {
     if (!sessionRef.current && !sessionActive) return
     sessionRef.current = false
+    // Capture the practiced topic before clearing it — memory needs it below.
+    const sessionTopic = selectedTopicRef.current
     selectedTopicRef.current = null
 
     try {
@@ -404,6 +459,23 @@ export default function Pandu() {
       summary = trackerRef.current.getSummary()
       if (summary) saveSessionSummary(summary)
       trackerRef.current = null
+    }
+
+    // Update Aria's cross-session memory and check for milestone badges.
+    if (summary) {
+      const memory = updateMemoryAfterSession(
+        summary,
+        sessionTopic,
+        getCorrections(),
+      )
+      const milestones = checkMemoryMilestones(memory)
+      if (milestones.length > 0) {
+        try {
+          localStorage.setItem('ariaMilestones', JSON.stringify(milestones))
+        } catch {
+          // ignore storage errors
+        }
+      }
     }
 
     if (summary) {
@@ -466,6 +538,7 @@ export default function Pandu() {
 
     setSessionFillerCount(0)
     setCurrentAnalysis(null)
+    setPronScore(null)
     setConversationMode(false)
     setSessionActive(false)
     setConvState(STATES.IDLE)
@@ -530,6 +603,7 @@ export default function Pandu() {
         onToggleSession={toggleSession}
         sessionFillerCount={sessionFillerCount}
         currentAnalysis={currentAnalysis}
+        pronScore={pronScore}
       />
 
       {showScorecard && (

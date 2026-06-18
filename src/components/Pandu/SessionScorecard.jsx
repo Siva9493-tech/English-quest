@@ -2,11 +2,23 @@ import { useState, useEffect } from 'react'
 
 export default function SessionScorecard({ onClose }) {
   const [summary, setSummary] = useState(null)
+  const [milestones, setMilestones] = useState([])
 
   useEffect(() => {
     try {
       const data = localStorage.getItem('lastSessionSummary')
       if (data) setSummary(JSON.parse(data))
+    } catch (e) {
+      console.error(e)
+    }
+
+    // Pull any milestone badges earned this session, then clear them.
+    try {
+      const mData = localStorage.getItem('ariaMilestones')
+      if (mData) {
+        setMilestones(JSON.parse(mData))
+        localStorage.removeItem('ariaMilestones')
+      }
     } catch (e) {
       console.error(e)
     }
@@ -22,6 +34,7 @@ export default function SessionScorecard({ onClose }) {
     paceScore,
     exchanges,
     fluencyGrade,
+    avgPronScore,
   } = summary
 
   // Generate Aria's personal feedback text
@@ -74,6 +87,8 @@ export default function SessionScorecard({ onClose }) {
           width: '100%',
           boxShadow: '0 0 60px rgba(0,229,255,0.2)',
           position: 'relative',
+          maxHeight: '90vh',
+          overflowY: 'auto',
         }}
       >
         {/* Header */}
@@ -170,7 +185,7 @@ export default function SessionScorecard({ onClose }) {
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 1fr 1fr',
+            gridTemplateColumns: '1fr 1fr 1fr 1fr',
             gap: '12px',
             marginBottom: '24px',
           }}
@@ -206,6 +221,17 @@ export default function SessionScorecard({ onClose }) {
                 avgQuality >= 80
                   ? '#22c55e'
                   : avgQuality >= 60
+                    ? '#ffd700'
+                    : '#ff006e',
+            },
+            {
+              label: 'Pronunciation',
+              value: avgPronScore ? avgPronScore + '%' : 'N/A',
+              icon: '🗣️',
+              color:
+                (avgPronScore || 0) >= 80
+                  ? '#22c55e'
+                  : (avgPronScore || 0) >= 60
                     ? '#ffd700'
                     : '#ff006e',
             },
@@ -292,25 +318,71 @@ export default function SessionScorecard({ onClose }) {
           </p>
         </div>
 
-        {/* Close Button */}
-        <button
-          onClick={onClose}
+        {/* Milestone badges earned this session */}
+        {milestones.length > 0 &&
+          milestones.map((m, i) => (
+            <div
+              key={i}
+              style={{
+                background:
+                  'linear-gradient(135deg, rgba(255,215,0,0.15), rgba(0,229,255,0.1))',
+                border: '1px solid rgba(255,215,0,0.4)',
+                borderRadius: '12px',
+                padding: '14px 16px',
+                marginBottom: '12px',
+                textAlign: 'center',
+              }}
+            >
+              <div style={{ fontSize: '24px', marginBottom: '4px' }}>🏅</div>
+              <div
+                style={{
+                  color: '#ffd700',
+                  fontWeight: '800',
+                  fontSize: '15px',
+                  marginBottom: '2px',
+                }}
+              >
+                {m.title}
+              </div>
+              <div
+                style={{
+                  color: 'var(--text-muted)',
+                  fontSize: '12px',
+                }}
+              >
+                {m.desc}
+              </div>
+            </div>
+          ))}
+
+        {/* Sticky button at bottom */}
+        <div
           style={{
-            width: '100%',
-            padding: '14px',
-            background:
-              'linear-gradient(135deg, var(--color-cyan), var(--color-purple))',
-            color: '#0a0a0f',
-            fontWeight: '800',
-            fontSize: '15px',
-            border: 'none',
-            borderRadius: '12px',
-            cursor: 'pointer',
-            letterSpacing: '0.05em',
+            position: 'sticky',
+            bottom: 0,
+            background: 'var(--bg-card)',
+            padding: '16px 0 4px',
+            marginTop: '16px',
           }}
         >
-          Keep Practicing! 🚀
-        </button>
+          <button
+            onClick={onClose}
+            style={{
+              width: '100%',
+              padding: '14px',
+              background:
+                'linear-gradient(135deg, var(--color-cyan), var(--color-purple))',
+              color: '#0a0a0f',
+              fontWeight: '800',
+              fontSize: '15px',
+              border: 'none',
+              borderRadius: '12px',
+              cursor: 'pointer',
+            }}
+          >
+            Keep Practicing! 🚀
+          </button>
+        </div>
       </div>
     </div>
   )

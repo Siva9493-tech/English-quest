@@ -40,6 +40,24 @@ export default function Home() {
         totalCount={totalCount}
       />
 
+      <div>
+        <Link
+          to="/analytics"
+          style={{
+            display: 'inline-block',
+            background: 'transparent',
+            border: '1px solid var(--border-glow)',
+            borderRadius: '8px',
+            padding: '8px 16px',
+            color: 'var(--color-cyan)',
+            fontSize: '12px',
+            cursor: 'pointer',
+          }}
+        >
+          📊 View Full Analytics →
+        </Link>
+      </div>
+
       <BadgesSection badges={badges} />
     </div>
   )

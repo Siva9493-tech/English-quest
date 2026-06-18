@@ -32,6 +32,7 @@ export default function PanduPanel({
   onToggleSession,
   sessionFillerCount,
   currentAnalysis,
+  pronScore,
 }) {
   useEffect(() => {
     if (!open) return
@@ -53,6 +54,7 @@ export default function PanduPanel({
       onToggleSession={onToggleSession}
       sessionFillerCount={sessionFillerCount}
       currentAnalysis={currentAnalysis}
+      pronScore={pronScore}
     />
   )
 }
@@ -66,6 +68,7 @@ function PanelInner({
   onToggleSession,
   sessionFillerCount,
   currentAnalysis,
+  pronScore,
 }) {
   const user = getPanduUser()
   const stats = getStats()
@@ -321,6 +324,7 @@ function PanelInner({
                     ? '⚡ Fast'
                     : '🐢 Slow'}
               </span>
+              {pronScore && <span>🗣️ Pron: {pronScore}%</span>}
             </div>
           )}
 
