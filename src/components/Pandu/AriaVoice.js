@@ -1,12 +1,80 @@
 // AriaVoice.js
 // Human-sounding TTS for Aria
-// Uses Kokoro-82M v1.0 → falls back to
+// Priority: ElevenLabs → Kokoro-82M v1.0 →
 // best available browser voice
 
 let kokoroPipeline = null;
 let kokoroLoading = false;
 let kokoroFailed = false;
 let currentUtterance = null;
+
+// ─── ELEVENLABS (PRIMARY) ──────────────────────
+// The API key lives server-side; the browser talks to our /api/speak proxy.
+// VOICE_ID is not secret, so it can still come from a build-time env var.
+const VOICE_ID =
+  import.meta.env.VITE_ELEVENLABS_VOICE_ID || 'EXAVITQu4vr4xnSDxMaL'; // Sarah (premade)
+
+// Track monthly character usage to stay under the free tier limit
+function checkElevenLabsBudget(text) {
+  // Reset counter when the month changes
+  const thisMonth = String(new Date().getMonth());
+  const lastReset = localStorage.getItem('elevenLabsReset');
+  if (lastReset !== thisMonth) {
+    localStorage.setItem('elevenLabsChars', '0');
+    localStorage.setItem('elevenLabsReset', thisMonth);
+  }
+
+  const charCount = parseInt(
+    localStorage.getItem('elevenLabsChars') || '0',
+    10,
+  );
+
+  if (charCount + text.length > 9000) {
+    // Near the limit — skip to Kokoro
+    throw new Error('Monthly limit approaching');
+  }
+
+  localStorage.setItem('elevenLabsChars', String(charCount + text.length));
+}
+
+async function elevenLabsSpeak(text) {
+  checkElevenLabsBudget(text);
+
+  const response = await fetch('/api/speak', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      text,
+      voiceId: VOICE_ID,
+      voice_settings: {
+        stability: 0.5,
+        similarity_boost: 0.8,
+        style: 0.3,
+        use_speaker_boost: true,
+      },
+    }),
+  });
+
+  if (!response.ok) throw new Error('ElevenLabs failed');
+
+  const audioBlob = await response.blob();
+  const audioUrl = URL.createObjectURL(audioBlob);
+
+  return new Promise((resolve) => {
+    const audio = new Audio(audioUrl);
+    audio.onended = () => {
+      URL.revokeObjectURL(audioUrl);
+      resolve();
+    };
+    audio.onerror = () => {
+      URL.revokeObjectURL(audioUrl);
+      resolve();
+    };
+    audio.play();
+  });
+}
 
 // ─── KOKORO INIT ───────────────────────────────
 async function initKokoro() {
@@ -152,8 +220,16 @@ export async function ariaSpeak(text) {
   const clean = cleanForSpeech(text);
   if (!clean) return;
 
+  // 1) Try ElevenLabs first (best quality)
   try {
-    // Try Kokoro first
+    await elevenLabsSpeak(clean);
+    return;
+  } catch (err) {
+    console.warn('Aria: ElevenLabs unavailable →', err.message);
+  }
+
+  // 2) Fall back to Kokoro (good quality)
+  try {
     if (!kokoroFailed) {
       await kokoroSpeak(clean);
       return;
@@ -163,7 +239,7 @@ export async function ariaSpeak(text) {
     kokoroFailed = true;
   }
 
-  // Fallback to browser TTS
+  // 3) Fall back to browser TTS (basic)
   await browserSpeak(clean);
 }
 

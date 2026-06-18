@@ -33,6 +33,7 @@ export default function PanduPanel({
   sessionFillerCount,
   currentAnalysis,
   pronScore,
+  audioQuality,
 }) {
   useEffect(() => {
     if (!open) return
@@ -55,6 +56,7 @@ export default function PanduPanel({
       sessionFillerCount={sessionFillerCount}
       currentAnalysis={currentAnalysis}
       pronScore={pronScore}
+      audioQuality={audioQuality}
     />
   )
 }
@@ -69,6 +71,7 @@ function PanelInner({
   sessionFillerCount,
   currentAnalysis,
   pronScore,
+  audioQuality,
 }) {
   const user = getPanduUser()
   const stats = getStats()
@@ -325,6 +328,11 @@ function PanelInner({
                     : '🐢 Slow'}
               </span>
               {pronScore && <span>🗣️ Pron: {pronScore}%</span>}
+              {audioQuality && (
+                <span title={audioQuality.feedback}>
+                  🎚️ Clarity: {audioQuality.score}%
+                </span>
+              )}
             </div>
           )}
 

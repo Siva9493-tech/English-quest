@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getModuleStats } from '../utils/progress'
+import { getModuleStats, isCapstoneUnlocked } from '../utils/progress'
 import { ISLAND_DATA, ISLAND_ORDER } from '../data/islands'
 
 const ISLAND_EMOJIS = {
@@ -30,6 +30,8 @@ export default function ModuleMap() {
     () => Object.fromEntries(stats.map((m) => [m.id, m])),
     [stats],
   )
+
+  const capstoneUnlocked = useMemo(() => isCapstoneUnlocked(), [])
 
   const [index, setIndex] = useState(loadIndex)
 
@@ -177,6 +179,82 @@ export default function ModuleMap() {
             />
           )
         })}
+      </div>
+
+      {/* Capstone — the Final Boss, unlocked only after all 14 islands are cleared */}
+      <CapstoneCard unlocked={capstoneUnlocked} onEnter={() => navigate('/capstone')} />
+    </div>
+  )
+}
+
+function CapstoneCard({ unlocked, onEnter }) {
+  return (
+    <div className="flex justify-center pt-2">
+      <div
+        className={`island-card relative w-full max-w-md ${unlocked ? 'island-active' : ''}`}
+        style={{
+          padding: 24,
+          textAlign: 'center',
+          boxShadow: unlocked ? '0 0 40px rgba(201, 168, 76, 0.6)' : undefined,
+        }}
+      >
+        <div
+          className="text-center leading-none"
+          style={{ fontSize: 72, filter: unlocked ? 'none' : 'grayscale(1)' }}
+        >
+          👑
+        </div>
+        <h2
+          className="mt-2 text-2xl font-extrabold"
+          style={{
+            color: 'var(--color-gold)',
+            textShadow: unlocked ? '0 0 14px rgba(201, 168, 76, 0.7)' : 'none',
+          }}
+        >
+          The Capstone
+        </h2>
+        <p className="mt-1 text-sm italic" style={{ color: 'var(--island-muted)' }}>
+          {unlocked
+            ? '“The Final Boss awaits — combine everything you’ve learned.”'
+            : '“Clear all 14 islands to unlock the ultimate challenge.”'}
+        </p>
+
+        <div className="mt-5">
+          {unlocked ? (
+            <button
+              type="button"
+              onClick={onEnter}
+              className="btn-cyber w-full"
+              style={{ padding: '12px 20px' }}
+            >
+              ⚔️ ENTER THE CAPSTONE →
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled
+              className="w-full rounded-lg py-3 text-sm font-bold"
+              style={{
+                background: 'var(--island-faint)',
+                color: 'var(--island-muted)',
+                cursor: 'not-allowed',
+              }}
+            >
+              🔒 LOCKED — 14/14 islands required
+            </button>
+          )}
+        </div>
+
+        {!unlocked && (
+          <div
+            className="absolute inset-0 flex items-center justify-center rounded-xl backdrop-blur-[2px]"
+            style={{ background: 'var(--island-veil)' }}
+          >
+            <span className="text-5xl" title="Locked">
+              🔒
+            </span>
+          </div>
+        )}
       </div>
     </div>
   )

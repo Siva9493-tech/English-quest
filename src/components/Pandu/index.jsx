@@ -17,6 +17,7 @@ import {
   getPronunciationTip,
   getPronunciationScore,
 } from './PronunciationScorer'
+import { analyzeAudioQuality } from './PronunciationAssessor'
 import {
   getHistory,
   getPanduUser,
@@ -77,6 +78,8 @@ export default function Pandu() {
   const [sessionFillerCount, setSessionFillerCount] = useState(0)
   const [currentAnalysis, setCurrentAnalysis] = useState(null)
   const [pronScore, setPronScore] = useState(null)
+  // Web Audio API delivery analysis (volume/energy + pause detection).
+  const [audioQuality, setAudioQuality] = useState(null)
   const [showScorecard, setShowScorecard] = useState(false)
   const [showTopicSelector, setShowTopicSelector] = useState(false)
 
@@ -161,16 +164,57 @@ export default function Pandu() {
     saveCorrection(match[1].trim(), match[2].trim())
   }
 
-  // Listen for one utterance. Resolves with the transcript, or '' on
-  // silence/error. A tap can stop early via recognitionRef.
+  // Listen for one utterance. Resolves with { transcript, audioBlob };
+  // transcript is '' on silence/error and audioBlob is null if recording
+  // wasn't possible. A tap can stop early via recognitionRef.
   function listenForSpeech() {
     return new Promise((resolve) => {
       const recognition = createRecognition()
       if (!recognition) {
-        resolve('')
+        resolve({ transcript: '', audioBlob: null })
         return
       }
       recognitionRef.current = recognition
+
+      // Record the mic in parallel with speech recognition so the Web Audio
+      // analyzer (PronunciationAssessor) has raw audio to score. This is a
+      // separate MediaStream from the one the Speech API manages internally.
+      let mediaRecorder = null
+      let micStream = null
+      const audioChunks = []
+      const startRecording = async () => {
+        if (typeof MediaRecorder === 'undefined') return
+        try {
+          micStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+          mediaRecorder = new MediaRecorder(micStream)
+          mediaRecorder.ondataavailable = (e) => {
+            if (e.data && e.data.size > 0) audioChunks.push(e.data)
+          }
+          mediaRecorder.start()
+        } catch {
+          mediaRecorder = null
+          micStream?.getTracks().forEach((t) => t.stop())
+          micStream = null
+        }
+      }
+      const stopRecording = () =>
+        new Promise((res) => {
+          const cleanup = () => {
+            micStream?.getTracks().forEach((t) => t.stop())
+            micStream = null
+            res(audioChunks.length ? new Blob(audioChunks) : null)
+          }
+          if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+            cleanup()
+            return
+          }
+          mediaRecorder.onstop = cleanup
+          try {
+            mediaRecorder.stop()
+          } catch {
+            cleanup()
+          }
+        })
 
       let finalText = ''
       let settled = false
@@ -181,7 +225,9 @@ export default function Pandu() {
         clearTimeout(timeout)
         clearTimeout(speechTimeout)
         if (recognitionRef.current === recognition) recognitionRef.current = null
-        resolve(value)
+        stopRecording().then((audioBlob) =>
+          resolve({ transcript: value, audioBlob }),
+        )
       }
 
       // Overall guard: give up only if the user never says anything at all.
@@ -231,6 +277,7 @@ export default function Pandu() {
 
       try {
         recognition.start()
+        startRecording()
         console.log('Aria mic started - waiting for speech...')
       } catch {
         finish('')
@@ -244,11 +291,11 @@ export default function Pandu() {
 
     try {
       setConvState(STATES.LISTENING)
-      const userSpeech = await listenForSpeech()
+      const { transcript: userSpeech, audioBlob } = await listenForSpeech()
 
       if (!sessionRef.current) return
 
-      const clean = userSpeech.trim()
+      const clean = (userSpeech || '').trim()
       if (!clean) {
         setTimeout(startConversationLoop, RETRY_AFTER_SILENCE_MS)
         return
@@ -302,6 +349,14 @@ export default function Pandu() {
       setPronScore(pScore)
       if (trackerRef.current) trackerRef.current.addPronScore(pScore)
       const pronTip = getPronunciationTip(clean)
+
+      // Web Audio API delivery analysis on the recorded blob — scores volume
+      // consistency and pauses. Runs locally, no external API.
+      if (audioBlob) {
+        analyzeAudioQuality(audioBlob).then((result) => {
+          if (result && sessionRef.current) setAudioQuality(result)
+        })
+      }
 
       // Only weave ONE feedback note into Aria's reply per turn, picked
       // at random so tips alternate between speech and pronunciation.
@@ -396,6 +451,7 @@ export default function Pandu() {
     setSessionFillerCount(0)
     setCurrentAnalysis(null)
     setPronScore(null)
+    setAudioQuality(null)
     lastConfidenceRef.current = null
     setSessionActive(true)
     setConversationMode(true)
@@ -539,6 +595,7 @@ export default function Pandu() {
     setSessionFillerCount(0)
     setCurrentAnalysis(null)
     setPronScore(null)
+    setAudioQuality(null)
     setConversationMode(false)
     setSessionActive(false)
     setConvState(STATES.IDLE)
@@ -604,6 +661,7 @@ export default function Pandu() {
         sessionFillerCount={sessionFillerCount}
         currentAnalysis={currentAnalysis}
         pronScore={pronScore}
+        audioQuality={audioQuality}
       />
 
       {showScorecard && (

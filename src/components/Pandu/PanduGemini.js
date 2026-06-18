@@ -5,24 +5,16 @@ import { getCorrections } from './PanduMemory'
 import { getAriaMemory, buildMemoryContext } from './AriaMemory'
 import { getUserAccent, buildAccentSystemPrompt } from './AccentTrainer'
 
-const GROQ_API_KEY = import.meta.env.VITE_GROQ_API_KEY
-const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions'
+// All Groq traffic now flows through our own /api/chat serverless proxy,
+// which holds GROQ_API_KEY server-side. No API key is exposed to the browser.
+const CHAT_URL = '/api/chat'
 const MODEL = 'llama-3.3-70b-versatile'
 
-// Startup diagnostic.
-console.log(
-  'Groq API Key loaded:',
-  GROQ_API_KEY
-    ? 'YES (length: ' + GROQ_API_KEY.length + ')'
-    : 'NO - KEY MISSING',
-)
-
-// Low-level call: send a messages[] array to Groq, return the reply text.
+// Low-level call: send a messages[] array to the proxy, return the reply text.
 async function chatCompletion(messages, { maxTokens = 150, temperature = 0.8 } = {}) {
-  const response = await fetch(GROQ_URL, {
+  const response = await fetch(CHAT_URL, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${GROQ_API_KEY}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
@@ -35,8 +27,8 @@ async function chatCompletion(messages, { maxTokens = 150, temperature = 0.8 } =
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}))
-    console.error('Groq error:', err)
-    throw new Error(err.error?.message || `HTTP ${response.status}`)
+    console.error('Chat proxy error:', err)
+    throw new Error(err.error?.message || err.error || `HTTP ${response.status}`)
   }
 
   const data = await response.json()
@@ -53,10 +45,6 @@ export function setConversationMode(enabled) {
 
 export async function askPandu(userMessage, userData, progressData, history) {
   try {
-    if (!GROQ_API_KEY) {
-      return 'Aria needs an API key. Check your .env file for VITE_GROQ_API_KEY'
-    }
-
     const name = userData?.name || 'friend'
     const nickname = userData?.nickname || userData?.name || 'friend'
     const progress = progressData || 'beginner'
@@ -161,31 +149,10 @@ TOPICS:
       { role: 'user', content: userMessage },
     ]
 
-    const response = await fetch(GROQ_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${GROQ_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        messages,
-        max_tokens: 150,
-        temperature: 0.8,
-      }),
-    })
-
-    if (!response.ok) {
-      const err = await response.json()
-      console.error('Groq error:', err)
-      return `Aria error: ${err.error?.message || 'something went wrong'}`
-    }
-
-    const data = await response.json()
-    const reply = data.choices?.[0]?.message?.content
+    const reply = await chatCompletion(messages, { maxTokens: 150, temperature: 0.8 })
 
     if (!reply) return "Hmm, I didn't catch that. Could you say that again?"
-    return reply.trim()
+    return reply
   } catch (error) {
     console.error('Aria fetch error:', error)
     return `Connection error: ${error.message}`
@@ -443,9 +410,6 @@ function toChatMessages(history) {
 }
 
 export async function askAriaPractice(userMessage, type, moduleId, userData, history) {
-  if (!GROQ_API_KEY) {
-    return "My AI brain isn't connected right now, but keep going out loud — you're doing great!"
-  }
   try {
     const scenario = getPracticeScenario(moduleId)
     const systemPrompt = buildPracticeSystemPrompt(type, scenario, userData)
@@ -463,11 +427,88 @@ export async function askAriaPractice(userMessage, type, moduleId, userData, his
   }
 }
 
+/* ───────────────────────── CAPSTONE EVALUATION ───────────────────────── */
+
+// Final boss evaluation. Aria reads the full 5-minute speech transcript and
+// scores how well the speaker combined all three required elements (grammar
+// from M1, a business scenario from M10, and modern slang from M7).
+// Returns { score: 0-100, feedback: string }.
+export async function getCapstoneEvaluation(transcript, userData) {
+  const nickname = userData?.nickname || userData?.name || 'friend'
+  const clean = (transcript || '').trim()
+
+  // Nothing captured — don't bother the model, just fail gracefully.
+  if (!clean) {
+    return {
+      score: 0,
+      feedback: `I didn't catch any of your speech, ${nickname}. Make sure your mic is on and give the Capstone another go — I know you've got this!`,
+    }
+  }
+
+  try {
+    const systemPrompt = `You are Aria, a warm but fair English coach grading the FINAL Capstone challenge for ${nickname}, who has completed all 14 modules.
+The student delivered one continuous 5-minute speech that had to combine THREE elements:
+1. GRAMMAR — correct, varied grammar and sentence structure (Module 1).
+2. BUSINESS — a professional/business scenario delivered with corporate-appropriate English (Module 10).
+3. SLANG — natural modern/internet slang woven in tastefully (Module 7).
+
+Grade holistically out of 100. Reward speakers who blend all three smoothly; deduct when an element is missing, forced, or grammatically weak. Be encouraging but honest.
+
+Respond with ONLY a single line of valid JSON, no markdown, in exactly this shape:
+{"score": <integer 0-100>, "feedback": "<2-3 warm sentences: one win, one element they nailed, one thing to improve>"}`
+
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      {
+        role: 'user',
+        content: `Here is the full transcript of my 5-minute Capstone speech. Grade it now:\n\n"${clean}"`,
+      },
+    ]
+
+    const reply = await chatCompletion(messages, {
+      maxTokens: 300,
+      temperature: 0.4,
+    })
+
+    return parseEvaluation(reply, nickname)
+  } catch (err) {
+    console.error('Aria capstone evaluation error:', err)
+    return {
+      score: 0,
+      feedback: `I had trouble scoring that one, ${nickname} — connection hiccup on my end. Your effort still counts; try submitting again in a moment!`,
+    }
+  }
+}
+
+// Pull { score, feedback } out of Aria's reply, tolerating stray prose or
+// code fences around the JSON.
+function parseEvaluation(reply, nickname) {
+  const fallback = {
+    score: 75,
+    feedback: `Strong work, ${nickname}! You kept the speech going and brought real energy. Keep polishing how smoothly you switch between formal and casual English.`,
+  }
+  if (!reply) return fallback
+
+  const match = reply.match(/\{[\s\S]*\}/)
+  if (!match) return fallback
+
+  try {
+    const parsed = JSON.parse(match[0])
+    let score = Number(parsed.score)
+    if (!Number.isFinite(score)) score = fallback.score
+    score = Math.max(0, Math.min(100, Math.round(score)))
+    const feedback =
+      typeof parsed.feedback === 'string' && parsed.feedback.trim()
+        ? parsed.feedback.trim()
+        : fallback.feedback
+    return { score, feedback }
+  } catch {
+    return fallback
+  }
+}
+
 // End-of-session wrap-up: exactly 2 wins + 1 improvement.
 export async function getPracticeSummary(userData, history) {
-  if (!GROQ_API_KEY) {
-    return 'Great session! Two wins: you kept speaking and you stayed in English the whole time. One thing to improve: slow down a touch on longer sentences. See you tomorrow!'
-  }
   try {
     const systemPrompt = `You are Aria wrapping up an English practice session. In under 4 warm sentences, give EXACTLY 2 specific things the user did well and 1 specific thing to improve next time. Speak directly to them. Speak in a warm, natural way. Use contractions like 'you're', 'it's', 'don't' — never formal stiff sentences. Your voice has natural pauses.`
 

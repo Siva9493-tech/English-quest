@@ -195,6 +195,12 @@ export function getModuleStats() {
   })
 }
 
+// The Capstone Module unlocks only once every one of the 14 modules is at 100%.
+export function isCapstoneUnlocked() {
+  const moduleStats = getModuleStats()
+  return moduleStats.every((m) => m.isComplete)
+}
+
 export function getStats() {
   const completed = getCompletedVideoIds()
   const allVideos = getAllVideos()

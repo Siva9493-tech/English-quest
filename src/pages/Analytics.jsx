@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { getStats, getModuleStats, getStreak } from '../utils/progress';
 import { getAriaMemory } from '../components/Pandu/AriaMemory';
-import { getSessionHistory } from '../components/Pandu/SpeechAnalyzer';
-import { getCorrections, getPanduUser } from '../components/Pandu/PanduMemory';
+import { getPanduUser } from '../components/Pandu/PanduMemory';
+import { getSessions, getCorrections } from '../utils/database';
 import { getUserAccent, setUserAccent } from '../components/Pandu/AccentTrainer';
+import { remindersEnabled } from '../utils/emailReminder';
+import { generateShareCard } from '../utils/shareCard';
 
 export default function Analytics() {
   const [stats, setStats] = useState(null);
@@ -12,13 +14,78 @@ export default function Analytics() {
   const [corrections, setCorrections] = useState([]);
   const [moduleStats, setModuleStats] = useState([]);
   const [activeTab, setActiveTab] = useState('overview');
+  const [emailReminders, setEmailReminders] = useState(remindersEnabled());
+
+  const toggleEmailReminders = () => {
+    const next = !emailReminders;
+    setEmailReminders(next);
+    localStorage.setItem('emailReminders', next ? 'on' : 'off');
+  };
+
+  const handleShare = async () => {
+    const cardStats = {
+      earnedXP: stats?.earnedXp || 0,
+      streak: getStreak(),
+      completedVideos: stats?.watchedVideosCount || 0,
+    };
+    const cardDataUrl = await generateShareCard(userData, cardStats);
+
+    // Try Web Share API first (mobile)
+    if (navigator.share) {
+      const blob = await (await fetch(cardDataUrl)).blob();
+      const file = new File([blob], 'progress.png', { type: 'image/png' });
+      try {
+        await navigator.share({
+          title: 'My EnglishQuest Progress!',
+          text: 'Check out my English learning progress!',
+          files: [file],
+        });
+        return;
+      } catch {
+        // User cancelled or sharing failed — fall through to download.
+      }
+    }
+
+    // Desktop (or share unavailable): download the image.
+    const link = document.createElement('a');
+    link.download = 'englishquest-progress.png';
+    link.href = cardDataUrl;
+    link.click();
+  };
 
   useEffect(() => {
-    setStats(getStats());
-    setMemory(getAriaMemory());
-    setSessions(getSessionHistory());
-    setCorrections(getCorrections());
-    setModuleStats(getModuleStats());
+    let active = true;
+
+    const loadData = () => {
+      setStats(getStats());
+      setMemory(getAriaMemory());
+      setModuleStats(getModuleStats());
+
+      // Sessions & corrections come from Supabase (cached in localStorage).
+      getSessions().then((data) => {
+        if (active) setSessions(data);
+      });
+      getCorrections().then((data) => {
+        if (active) setCorrections(data);
+      });
+    };
+
+    // Load on mount
+    loadData();
+
+    // Reload when the user comes back to this tab (e.g. after an Aria session)
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        loadData();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      active = false;
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, []);
 
   const userData = getPanduUser();
@@ -395,6 +462,96 @@ export default function Analytics() {
               </div>
             </div>
           )}
+
+          {/* Reminder Settings */}
+          <div className="cyber-card" style={{
+            padding: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '16px',
+          }}>
+            <div>
+              <p style={{
+                color: 'var(--color-cyan)',
+                fontSize: '12px',
+                fontWeight: '700',
+                letterSpacing: '0.1em',
+                margin: '0 0 6px',
+              }}>
+                ✉️ DAILY EMAIL REMINDERS
+              </p>
+              <p style={{
+                color: 'var(--text-muted)',
+                fontSize: '13px',
+                margin: 0,
+              }}>
+                Get a nudge from Aria each evening to keep your streak alive.
+              </p>
+            </div>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              flexShrink: 0,
+            }}>
+            <span style={{
+              fontSize: '12px',
+              fontWeight: '800',
+              letterSpacing: '0.08em',
+              color: emailReminders
+                ? 'var(--color-cyan)'
+                : 'var(--text-muted)',
+            }}>
+              {emailReminders ? 'ON' : 'OFF'}
+            </span>
+            <button
+              onClick={toggleEmailReminders}
+              role="switch"
+              aria-checked={emailReminders}
+              style={{
+                flexShrink: 0,
+                width: '64px',
+                height: '32px',
+                borderRadius: '999px',
+                border: `1px solid ${
+                  emailReminders
+                    ? 'var(--color-cyan)'
+                    : 'var(--border-glow)'
+                }`,
+                background: emailReminders
+                  ? 'rgba(0,229,255,0.2)'
+                  : 'var(--bg-surface)',
+                position: 'relative',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+              }}
+            >
+              <span style={{
+                position: 'absolute',
+                top: '3px',
+                left: emailReminders ? '35px' : '3px',
+                width: '24px',
+                height: '24px',
+                borderRadius: '50%',
+                background: emailReminders
+                  ? 'var(--color-cyan)'
+                  : 'var(--text-muted)',
+                transition: 'left 0.2s',
+              }}/>
+            </button>
+            </div>
+          </div>
+
+          {/* Share Progress */}
+          <div style={{
+            textAlign: 'center',
+            marginTop: '20px',
+          }}>
+            <button onClick={handleShare} className="btn-cyber">
+              📤 Share My Progress
+            </button>
+          </div>
         </div>
       )}
 

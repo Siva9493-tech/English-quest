@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getBadges, getStats, getStreak } from '../utils/progress'
 
@@ -9,6 +9,37 @@ export default function Home() {
     useMemo(() => getStats(), [])
 
   const xpPercent = totalXp > 0 ? Math.round((earnedXp / totalXp) * 100) : 0
+
+  const [deferredPrompt, setDeferredPrompt] = useState(null)
+  const [showInstallBanner, setShowInstallBanner] = useState(false)
+
+  useEffect(() => {
+    const handleBeforeInstall = (e) => {
+      e.preventDefault()
+      setDeferredPrompt(e)
+      setShowInstallBanner(true)
+    }
+    const handleInstalled = () => {
+      setShowInstallBanner(false)
+      setDeferredPrompt(null)
+    }
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall)
+    window.addEventListener('appinstalled', handleInstalled)
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall)
+      window.removeEventListener('appinstalled', handleInstalled)
+    }
+  }, [])
+
+  const handleInstall = async () => {
+    if (!deferredPrompt) return
+    deferredPrompt.prompt()
+    const result = await deferredPrompt.userChoice
+    if (result.outcome === 'accepted') {
+      setShowInstallBanner(false)
+    }
+    setDeferredPrompt(null)
+  }
 
   return (
     <div className="space-y-6">
@@ -59,6 +90,47 @@ export default function Home() {
       </div>
 
       <BadgesSection badges={badges} />
+
+      {showInstallBanner && (
+        <InstallBanner
+          onInstall={handleInstall}
+          onDismiss={() => setShowInstallBanner(false)}
+        />
+      )}
+    </div>
+  )
+}
+
+function InstallBanner({ onInstall, onDismiss }) {
+  return (
+    <div
+      className="fixed inset-x-0 bottom-0 z-50 flex items-center justify-between gap-3 px-4 py-3"
+      style={{
+        background: 'var(--bg-card)',
+        borderTop: '1px solid var(--color-cyan)',
+        boxShadow: '0 -4px 24px rgba(0, 229, 255, 0.25)',
+      }}
+    >
+      <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+        Install EnglishQuest on your phone! 📱
+      </p>
+      <div className="flex items-center gap-2">
+        <button onClick={onInstall} className="btn-cyber text-sm">
+          Install
+        </button>
+        <button
+          onClick={onDismiss}
+          aria-label="Dismiss"
+          className="rounded-lg px-3 py-2 text-sm font-semibold transition"
+          style={{
+            background: 'var(--bg-surface)',
+            color: 'var(--text-muted)',
+            border: '1px solid var(--border-glow)',
+          }}
+        >
+          ✕
+        </button>
+      </div>
     </div>
   )
 }

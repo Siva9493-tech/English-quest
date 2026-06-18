@@ -65,15 +65,6 @@ export default function PanduButton({
   const loadingTimerRef = useRef(null)
   const pollRef = useRef(null)
 
-  // Test Groq connection on load.
-  useEffect(() => {
-    const testKey = import.meta.env.VITE_GROQ_API_KEY
-    console.log(
-      'Aria API Key status:',
-      testKey ? `loaded (${testKey.length} chars)` : 'MISSING - check .env',
-    )
-  }, [])
-
   // On first ever visit the Kokoro voice model downloads in the background.
   // Poll for the "ariaVoiceLoaded" flag and hide the indicator once it's set
   // (or give up after the timeout, e.g. when it falls back to browser TTS).
