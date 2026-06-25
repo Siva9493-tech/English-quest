@@ -30,7 +30,19 @@ export async function signUp(email, password, userData) {
       password: password,
     });
 
-  if (signUpError) throw signUpError;
+  if (signUpError) {
+    // Supabase returns 422 "User already registered" when the email exists.
+    // Surface a clear, actionable message instead of the raw error.
+    const msg = signUpError.message || '';
+    if (
+      signUpError.status === 422 ||
+      signUpError.code === 'user_already_exists' ||
+      /already registered|already exists/i.test(msg)
+    ) {
+      throw new Error('This email is already registered. Please sign in instead.');
+    }
+    throw signUpError;
+  }
   if (!data.user) throw new Error('Signup failed');
 
   // Save extra user data to users table
