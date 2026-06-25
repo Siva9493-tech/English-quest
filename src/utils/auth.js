@@ -18,13 +18,27 @@ const noClientError = {
 // (e.g. { name, level, accent }) saved to the user's metadata.
 export async function signUp(email, password, userData = {}) {
   if (!supabase) return noClientError
-  return supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: userData,
-    },
-  })
+
+  try {
+    const { error: signUpError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: userData },
+    })
+    if (signUpError) throw signUpError
+
+    // Auto sign in immediately after a successful sign-up so the user lands
+    // in an authenticated session without a second manual step. (If the
+    // project requires email confirmation this will return an error, which
+    // we surface to the caller.)
+    const { data, error: signInError } =
+      await supabase.auth.signInWithPassword({ email, password })
+    if (signInError) throw signInError
+
+    return { data, error: null }
+  } catch (error) {
+    return { data: { user: null, session: null }, error }
+  }
 }
 
 // Sign in with email + password.

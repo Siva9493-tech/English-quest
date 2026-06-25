@@ -45,12 +45,14 @@ export default function Login() {
   }
 
   const handleGoogle = async () => {
-    setError('')
     setLoading(true)
-    const { error } = await signInWithGoogle()
-    // On success the browser redirects to Google, so we only land here on error.
-    if (error) {
-      setError(error.message)
+    setError('')
+    try {
+      const { error } = await signInWithGoogle()
+      if (error) throw error
+      // On success the browser redirects to Google; we only continue here on error.
+    } catch (err) {
+      setError(err.message)
       setLoading(false)
     }
   }

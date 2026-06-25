@@ -10,6 +10,12 @@ const url = import.meta.env.VITE_SUPABASE_URL
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY
 const isConfigured = url?.includes('supabase.co') && !!key
 
+// Startup diagnostic: confirm the URL points at a real Supabase project.
+console.log(
+  'Supabase connected:',
+  url?.includes('supabase.co') ? '✅' : '❌ wrong URL',
+)
+
 export const supabase = isConfigured
   ? createClient(url, key)
   : null // graceful fallback — app runs offline against localStorage
