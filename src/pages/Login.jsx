@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { signIn, signUp, signInWithGoogle } from '../utils/auth'
+import { signIn, signUp } from '../utils/auth'
 
 // Auth screen: email/password sign-in & sign-up plus Google OAuth.
 // Styled to match the app's cyberpunk theme (CSS vars + .cyber-card).
@@ -20,18 +20,18 @@ export default function Login() {
     e.preventDefault()
     setError('')
     setNotice('')
+
+    if (isSignup && password.length < 6) {
+      setError('Password must be at least 6 characters long')
+      return
+    }
+
     setLoading(true)
 
     try {
       if (isSignup) {
-        const { data, error } = await signUp(email, password, { name })
-        if (error) throw error
-        // If email confirmation is required there's no active session yet.
-        if (!data.session) {
-          setNotice('Check your email to confirm your account, then sign in.')
-          setMode('signin')
-          return
-        }
+        // signUp throws on failure and returns the created user on success.
+        await signUp(email, password, { name })
       } else {
         const { error } = await signIn(email, password)
         if (error) throw error
@@ -40,19 +40,6 @@ export default function Login() {
     } catch (err) {
       setError(err?.message || 'Something went wrong. Please try again.')
     } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleGoogle = async () => {
-    setLoading(true)
-    setError('')
-    try {
-      const { error } = await signInWithGoogle()
-      if (error) throw error
-      // On success the browser redirects to Google; we only continue here on error.
-    } catch (err) {
-      setError(err.message)
       setLoading(false)
     }
   }
@@ -180,31 +167,19 @@ export default function Login() {
           <span style={{ flex: 1, height: '1px', background: 'var(--border-glow)' }} />
         </div>
 
-        {/* Google OAuth */}
-        <button
-          type="button"
-          onClick={handleGoogle}
-          disabled={loading}
-          style={{
-            width: '100%',
-            padding: '11px',
-            borderRadius: '10px',
-            border: '1px solid var(--border-glow)',
-            background: 'var(--bg-surface)',
-            color: 'var(--text-primary)',
-            fontSize: '14px',
-            fontWeight: 600,
-            cursor: loading ? 'wait' : 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '10px',
-            transition: 'all 0.2s',
-          }}
-        >
-          <span style={{ fontSize: '16px' }}>🔵</span>
-          Continue with Google
-        </button>
+        {/* Google OAuth — temporarily disabled until email login is confirmed */}
+        <div style={{
+          textAlign: 'center',
+          color: 'var(--text-muted)',
+          fontSize: '13px',
+          padding: '12px',
+          background: 'var(--bg-surface)',
+          borderRadius: '8px',
+          border: '1px solid var(--border-glow)',
+        }}>
+          🔧 Google login coming soon!
+          Use email + password for now.
+        </div>
 
         {/* Toggle sign-in / sign-up */}
         <p

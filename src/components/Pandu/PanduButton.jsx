@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import AriaAvatar from './AriaAvatar'
 import { getPosition, savePosition } from './PanduMemory'
 
@@ -6,8 +6,6 @@ const SIZE = 64
 const MARGIN = 24
 const MOVE_THRESHOLD = 8
 const LONG_PRESS_MS = 5000
-const LOADING_POLL_MS = 2000
-const LOADING_TIMEOUT_MS = 30000
 
 // Wave-ring color per conversation state.
 const WAVE_COLORS = {
@@ -57,35 +55,11 @@ export default function PanduButton({
 }) {
   const [corner, setCorner] = useState(() => getPosition())
   const [dragPos, setDragPos] = useState(null)
-  const [voiceLoading, setVoiceLoading] = useState(
-    () => !localStorage.getItem('ariaVoiceLoaded'),
-  )
+  // Voice is either ElevenLabs (server proxy) or instant browser TTS — there's
+  // no model to download anymore, so the loading indicator never needs to show.
+  const [voiceLoading] = useState(false)
   const dragRef = useRef(null)
   const timerRef = useRef(null)
-  const loadingTimerRef = useRef(null)
-  const pollRef = useRef(null)
-
-  // On first ever visit the Kokoro voice model downloads in the background.
-  // Poll for the "ariaVoiceLoaded" flag and hide the indicator once it's set
-  // (or give up after the timeout, e.g. when it falls back to browser TTS).
-  useEffect(() => {
-    if (!voiceLoading) return
-
-    pollRef.current = setInterval(() => {
-      if (localStorage.getItem('ariaVoiceLoaded')) {
-        setVoiceLoading(false)
-      }
-    }, LOADING_POLL_MS)
-
-    loadingTimerRef.current = setTimeout(() => {
-      setVoiceLoading(false)
-    }, LOADING_TIMEOUT_MS)
-
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current)
-      if (loadingTimerRef.current) clearTimeout(loadingTimerRef.current)
-    }
-  }, [voiceLoading])
 
   function handlePointerDown(e) {
     // Only the primary (left) button drives drag + the session tap.

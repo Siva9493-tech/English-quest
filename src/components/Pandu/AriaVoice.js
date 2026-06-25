@@ -1,12 +1,11 @@
 // AriaVoice.js
 // Human-sounding TTS for Aria
-// Priority: ElevenLabs → Kokoro-82M v1.0 →
-// best available browser voice
-
-let kokoroPipeline = null;
-let kokoroLoading = false;
-let kokoroFailed = false;
-let currentUtterance = null;
+// Priority: ElevenLabs → best available browser voice
+//
+// Note: Kokoro-82M (onnx-community/Kokoro-82M-v1.0) was previously the
+// middle tier, but the model is now gated on HuggingFace and returns 401
+// without an authenticated account. We skip it entirely and fall straight
+// through to browser TTS so there are no failed downloads on every load.
 
 // ─── ELEVENLABS (PRIMARY) ──────────────────────
 // The API key lives server-side; the browser talks to our /api/speak proxy.
@@ -30,7 +29,7 @@ function checkElevenLabsBudget(text) {
   );
 
   if (charCount + text.length > 9000) {
-    // Near the limit — skip to Kokoro
+    // Near the limit — skip to browser TTS
     throw new Error('Monthly limit approaching');
   }
 
@@ -73,65 +72,6 @@ async function elevenLabsSpeak(text) {
       resolve();
     };
     audio.play();
-  });
-}
-
-// ─── KOKORO INIT ───────────────────────────────
-async function initKokoro() {
-  if (kokoroPipeline) return kokoroPipeline;
-  if (kokoroLoading) return null;
-  if (kokoroFailed) return null;
-
-  try {
-    kokoroLoading = true;
-    console.log('Aria: Loading Kokoro voice...');
-
-    const { pipeline } = await import('@huggingface/transformers');
-
-    kokoroPipeline = await pipeline(
-      'text-to-speech',
-      'onnx-community/Kokoro-82M-v1.0',
-      {
-        dtype: 'fp32',
-        device: 'wasm',
-      },
-    );
-
-    kokoroLoading = false;
-    console.log('Aria: Kokoro voice ready ✅');
-    localStorage.setItem('ariaVoiceLoaded', 'true');
-    return kokoroPipeline;
-  } catch (err) {
-    kokoroLoading = false;
-    kokoroFailed = true;
-    console.warn('Aria: Kokoro failed →', err.message);
-    return null;
-  }
-}
-
-// ─── KOKORO SPEAK ──────────────────────────────
-async function kokoroSpeak(text) {
-  const tts = await initKokoro();
-  if (!tts) throw new Error('Kokoro not available');
-
-  const result = await tts(text, {
-    voice: 'af_heart', // warm American female
-    speed: 0.92,
-  });
-
-  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
-  const buffer = await audioCtx.decodeAudioData(result.audio.buffer.slice(0));
-
-  return new Promise((resolve) => {
-    const source = audioCtx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(audioCtx.destination);
-    source.onended = () => {
-      audioCtx.close();
-      resolve();
-    };
-    source.start(0);
   });
 }
 
@@ -186,7 +126,6 @@ function browserSpeak(text) {
 
     utterance.onend = resolve;
     utterance.onerror = resolve;
-    currentUtterance = utterance;
 
     window.speechSynthesis.speak(utterance);
   });
@@ -228,43 +167,27 @@ export async function ariaSpeak(text) {
     console.warn('Aria: ElevenLabs unavailable →', err.message);
   }
 
-  // 2) Fall back to Kokoro (good quality)
-  try {
-    if (!kokoroFailed) {
-      await kokoroSpeak(clean);
-      return;
-    }
-  } catch (err) {
-    console.warn('Aria: Kokoro speak failed, using browser TTS');
-    kokoroFailed = true;
-  }
-
-  // 3) Fall back to browser TTS (basic)
+  // 2) Fall back to browser TTS (basic)
   await browserSpeak(clean);
 }
 
 // Stop any current speech
 export function stopAria() {
   window.speechSynthesis.cancel();
-  currentUtterance = null;
 }
 
-// Preload Kokoro in background on app start
-// so first message plays instantly
+// Warm up the browser's voice list on app start. getVoices() populates
+// asynchronously in some browsers, so kicking it early means the first
+// browser-TTS fallback has a voice ready instead of waiting on
+// onvoiceschanged.
 export function preloadAriaVoice() {
-  // Only preload if not already done
-  const alreadyLoaded = localStorage.getItem('ariaVoiceLoaded');
+  if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
-  if (!alreadyLoaded) {
-    // Delay preload by 3 seconds so app
-    // loads fast first
-    setTimeout(() => {
-      initKokoro().catch(() => {
-        console.log('Aria: Will use browser voice');
-      });
-    }, 3000);
-  } else {
-    // Already cached — load immediately
-    initKokoro().catch(() => {});
+  // Touch the list now; if it's empty the browser will fire onvoiceschanged
+  // once the voices are loaded.
+  if (window.speechSynthesis.getVoices().length === 0) {
+    window.speechSynthesis.onvoiceschanged = () => {
+      window.speechSynthesis.getVoices();
+    };
   }
 }

@@ -15,30 +15,49 @@ const noClientError = {
 }
 
 // Create a new account. `userData` is an object of profile fields
-// (e.g. { name, level, accent }) saved to the user's metadata.
-export async function signUp(email, password, userData = {}) {
-  if (!supabase) return noClientError
+// (e.g. { name, nickname, personality, accent }) saved to the users table.
+export async function signUp(email, password, userData) {
+  if (!supabase) throw new Error('Supabase not configured');
 
-  try {
-    const { error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: userData },
-    })
-    if (signUpError) throw signUpError
-
-    // Auto sign in immediately after a successful sign-up so the user lands
-    // in an authenticated session without a second manual step. (If the
-    // project requires email confirmation this will return an error, which
-    // we surface to the caller.)
-    const { data, error: signInError } =
-      await supabase.auth.signInWithPassword({ email, password })
-    if (signInError) throw signInError
-
-    return { data, error: null }
-  } catch (error) {
-    return { data: { user: null, session: null }, error }
+  // Supabase requires password minimum 6 chars
+  if (password.length < 6) {
+    throw new Error('Password must be at least 6 characters');
   }
+
+  const { data, error: signUpError } = await
+    supabase.auth.signUp({
+      email: email.trim(),
+      password: password,
+    });
+
+  if (signUpError) throw signUpError;
+  if (!data.user) throw new Error('Signup failed');
+
+  // Save extra user data to users table
+  try {
+    await supabase.from('users').upsert({
+      id: data.user.id,
+      email: email.trim(),
+      name: userData?.name || '',
+      nickname: userData?.nickname || '',
+      personality: userData?.personality || 'Friendly & Warm',
+      accent: userData?.accent || 'american',
+      created_at: new Date().toISOString(),
+    });
+  } catch(e) {
+    console.warn('Could not save user profile:', e);
+  }
+
+  // Auto sign in after signup
+  const { error: signInError } = await
+    supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password: password,
+    });
+
+  if (signInError) throw signInError;
+
+  return data.user;
 }
 
 // Sign in with email + password.
