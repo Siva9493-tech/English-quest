@@ -79,6 +79,9 @@ export async function saveSession(sessionData) {
   cached.push(record)
   writeCache(CACHE.sessions, cached.slice(-30))
 
+  // No Supabase client configured → localStorage is the source of truth.
+  if (!supabase) return { queued: false }
+
   // 2) Supabase — or queue if offline / unauthenticated / failed.
   const user = isOnline() ? await getCurrentUser() : null
   if (!user) {
@@ -99,6 +102,7 @@ export async function saveSession(sessionData) {
 
 // Read sessions: Supabase first (then cache it); fall back to cache offline.
 export async function getSessions() {
+  if (!supabase) return readCache(CACHE.sessions)
   const user = isOnline() ? await getCurrentUser() : null
   if (!user) return readCache(CACHE.sessions)
 
@@ -131,6 +135,9 @@ export async function saveCorrection(wrong, correct) {
   cached.push(record)
   writeCache(CACHE.corrections, cached.slice(-50))
 
+  // No Supabase client configured → localStorage is the source of truth.
+  if (!supabase) return { queued: false }
+
   // 2) Supabase — or queue.
   const user = isOnline() ? await getCurrentUser() : null
   if (!user) {
@@ -154,6 +161,7 @@ export async function saveCorrection(wrong, correct) {
 
 // Read corrections: Supabase first (then cache it); cache fallback offline.
 export async function getCorrections() {
+  if (!supabase) return readCache(CACHE.corrections)
   const user = isOnline() ? await getCurrentUser() : null
   if (!user) return readCache(CACHE.corrections)
 
@@ -181,6 +189,7 @@ function queueRecord(key, record) {
 // (e.g. on the window "online" event or on app start). No-op if signed out
 // or there's nothing pending.
 export async function syncPending() {
+  if (!supabase) return
   if (!isOnline()) return
   const user = await getCurrentUser()
   if (!user) return

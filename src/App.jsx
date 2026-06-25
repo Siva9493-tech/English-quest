@@ -20,6 +20,7 @@ import { sendReminderEmail, shouldSendReminder } from './utils/emailReminder'
 import { getPanduUser } from './components/Pandu/PanduMemory'
 import { getSession, onAuthStateChange } from './utils/auth'
 import { registerAutoSync, syncPending } from './utils/database'
+import { isSupabaseReady } from './utils/supabase'
 
 // Verify the Supabase URL is a real project URL (not a placeholder) on app start.
 console.log(
@@ -161,7 +162,10 @@ export default function App() {
       {/* bright grid layer revealed in the cursor light-pool (depth effect) */}
       <div id="grid-spotlight" aria-hidden="true" />
       <div className="min-h-screen text-left">
-        {session && <Navbar theme={theme} onToggleTheme={toggleTheme} />}
+        {/* Show chrome when authenticated, or when Supabase isn't configured. */}
+        {(session || !isSupabaseReady) && (
+          <Navbar theme={theme} onToggleTheme={toggleTheme} />
+        )}
         <main className="mx-auto max-w-4xl p-6">
           <Routes>
             {/* Auth route: bounce to home if already signed in. */}
@@ -201,7 +205,7 @@ export default function App() {
             />
           </Routes>
         </main>
-        {session && <Pandu />}
+        {(session || !isSupabaseReady) && <Pandu />}
       </div>
     </BrowserRouter>
   )
@@ -209,8 +213,13 @@ export default function App() {
 
 // Route guard: render children when authenticated, else redirect to /login,
 // preserving where the user was trying to go.
+//
+// Bypass: when Supabase isn't configured (no valid URL/key), auth can't work,
+// so render the children directly instead of redirecting to a dead /login.
 function RequireAuth({ session, children }) {
   const location = useLocation()
+  if (!isSupabaseReady) return <>{children}</>
+  // existing auth logic below...
   if (!session) {
     return <Navigate to="/login" replace state={{ from: location }} />
   }
