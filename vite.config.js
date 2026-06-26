@@ -130,9 +130,6 @@ export default defineConfig(({ mode }) => {
           drop_debugger: true,
           pure_funcs: ['console.log', 'console.info', 'console.debug', 'console.warn', 'console.error'],
           passes: 2,
-          global_defs: {
-            console: {},
-          },
         },
         mangle: true,
         format: {
