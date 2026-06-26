@@ -8,6 +8,7 @@ export default defineConfig([
   globalIgnores(['dist']),
   {
     files: ['**/*.{js,jsx}'],
+    ignores: ['api/**', 'vite.config.js', 'scripts/**'],
     extends: [
       js.configs.recommended,
       reactHooks.configs.flat.recommended,
@@ -16,6 +17,13 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
       parserOptions: { ecmaFeatures: { jsx: true } },
+    },
+  },
+  {
+    files: ['api/**/*.js', 'vite.config.js', 'scripts/**/*.js'],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.es2021 },
+      parserOptions: { ecmaFeatures: { jsx: false } },
     },
   },
 ])

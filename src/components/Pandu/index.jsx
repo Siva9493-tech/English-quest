@@ -46,7 +46,6 @@ const RETRY_AFTER_ERROR_MS = 2000 // pause before retrying after an error
 const TURN_GAP_MS = 500 // natural pause between Aria speaking and listening again
 const MAX_SESSION_SECONDS = 1200 // auto-end the call after 20 minutes
 const CONFIRM_DELAY_MS = 1500 // wait 1.5s after hearing transcript before sending
-const CORRECTION_WINDOW_MS = 2000 // user has 2s to say "no/wrong/repeat"
 
 // Conversation state machine.
 const STATES = {
@@ -335,10 +334,7 @@ export default function Pandu() {
       // Show what was heard immediately with "I heard:" prefix
       showHeardBubble(clean)
 
-      // Check for correction commands
-      const wrongWords = ['no', 'wrong', 'repeat', 'not that', 'mistake', 'again']
-
-      // Wait 1.5s then check if user said a correction word
+      // Wait 1.5s for user to confirm or correct
       await sleep(CONFIRM_DELAY_MS)
 
       // If speech was very short (less than 2 words) and doesn't make sense, ask to repeat
