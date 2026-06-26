@@ -37,6 +37,7 @@ import {
 } from './AriaMemory'
 import { getStats } from '../../utils/progress'
 import { getUserAccent, getDailyPhrase } from './AccentTrainer'
+import { captureEvent, identifyUser } from '../../utils/analytics'
 
 const PILL_MS = 6000 // keep transcript bubbles visible for 6s
 const SILENCE_MS = 15000 // give up listening after 15s if the user never speaks
@@ -485,6 +486,10 @@ export default function Pandu() {
     setShowTopicSelector(false)
     selectedTopicRef.current = topic
 
+    captureEvent('aria_session_started', {
+      topic: selectedTopicRef.current?.title || 'free_chat',
+    })
+
     const userData = getPanduUser()
 
     sessionRef.current = true
@@ -634,6 +639,16 @@ export default function Pandu() {
       )
     }
 
+    if (summary) {
+      captureEvent('aria_session_completed', {
+        duration: summary.duration,
+        totalWords: summary.totalWords,
+        grade: summary.fluencyGrade?.grade,
+        quality: summary.avgQuality,
+        exchanges: summary.exchanges,
+      })
+    }
+
     setSessionFillerCount(0)
     setCurrentAnalysis(null)
     setPronScore(null)
@@ -653,6 +668,9 @@ export default function Pandu() {
 
   function handleOnboardingComplete() {
     setNeedsOnboarding(false)
+    const user = getPanduUser()
+    if (user?.email) identifyUser(user.email, { name: user.name, accent: user.accent })
+    captureEvent('onboarding_completed', { accent: user?.accent })
   }
 
   if (needsOnboarding) {

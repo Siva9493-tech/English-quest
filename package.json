@@ -13,8 +13,10 @@
     "@emailjs/browser": "^4.4.1",
     "@google/generative-ai": "^0.24.1",
     "@huggingface/transformers": "^4.2.0",
+    "@sentry/react": "^10.61.0",
     "@supabase/supabase-js": "^2.108.2",
     "kokoro-js": "^1.2.1",
+    "posthog-js": "^1.393.5",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "react-router-dom": "^7.17.0"

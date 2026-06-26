@@ -15,6 +15,7 @@ import {
   PRACTICE_TYPE_META,
 } from '../components/Pandu/PanduGemini'
 import { getPanduUser } from '../components/Pandu/PanduMemory'
+import { captureEvent } from '../utils/analytics'
 
 const PHASES = [
   { key: 'learn', label: 'Learn', minutes: 15, color: 'from-indigo-500 to-violet-500' },
@@ -116,12 +117,17 @@ function PracticeSession({ subTopic }) {
     return () => clearInterval(intervalRef.current)
   }, [running, finished])
 
+  useEffect(() => {
+    if (finished) captureEvent('practice_timer_completed')
+  }, [finished])
+
   const phase = PHASES[phaseIndex]
   const phaseTotal = phase.minutes * 60
   const progress = ((phaseTotal - secondsLeft) / phaseTotal) * 100
 
   function handleStartPause() {
     if (finished) return
+    if (!running) captureEvent('practice_timer_started', { phase: PHASES[phaseIndex].key })
     setRunning((r) => !r)
   }
 
