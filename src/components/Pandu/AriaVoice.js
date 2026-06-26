@@ -10,48 +10,42 @@ import { fetchWithTimeout } from '../../utils/fetchWithTimeout';
 const VOICE_ID =
   import.meta.env.VITE_ELEVENLABS_VOICE_ID || 'EXAVITQu4vr4xnSDxMaL'; // Sarah (premade)
 
+// Returns true if the server spoke the text, false if the caller should
+// fall back. Never throws — TTS failure must never break the conversation.
 async function elevenLabsSpeak(text) {
-  const response = await fetchWithTimeout('/api/speak', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      text,
-      voiceId: VOICE_ID,
-      voice_settings: {
-        stability: 0.5,
-        similarity_boost: 0.8,
-        style: 0.3,
-        use_speaker_boost: true,
+  try {
+    const response = await fetchWithTimeout('/api/speak', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
       },
-    }),
-  }, 8000);
+      body: JSON.stringify({ text, voiceId: VOICE_ID }),
+    }, 8000);
 
-  if (response.status === 503) {
-    const err = await response.json();
-    if (err.error === 'TTS_UNAVAILABLE') {
-      throw new Error('TTS_UNAVAILABLE');
+    if (response.status === 503) {
+      const err = await response.json();
+      console.warn('[Aria TTS] Server TTS unavailable:', err.message);
+      return false; // signal caller to fall back
     }
+
+    if (!response.ok) {
+      console.warn('[Aria TTS] Server TTS HTTP', response.status);
+      return false;
+    }
+
+    const audioBlob = await response.blob();
+    const audioUrl = URL.createObjectURL(audioBlob);
+
+    return new Promise((resolve) => {
+      const audio = new Audio(audioUrl);
+      audio.onended = () => { URL.revokeObjectURL(audioUrl); resolve(true); };
+      audio.onerror = () => { URL.revokeObjectURL(audioUrl); resolve(false); };
+      audio.play().catch(() => resolve(false));
+    });
+  } catch (err) {
+    console.warn('[Aria TTS] Network error:', err.message);
+    return false;
   }
-
-  if (!response.ok) throw new Error('ElevenLabs failed');
-
-  const audioBlob = await response.blob();
-  const audioUrl = URL.createObjectURL(audioBlob);
-
-  return new Promise((resolve) => {
-    const audio = new Audio(audioUrl);
-    audio.onended = () => {
-      URL.revokeObjectURL(audioUrl);
-      resolve();
-    };
-    audio.onerror = () => {
-      URL.revokeObjectURL(audioUrl);
-      resolve();
-    };
-    audio.play();
-  });
 }
 
 // ─── BROWSER TTS FALLBACK ──────────────────────
@@ -134,25 +128,24 @@ function cleanForSpeech(text) {
 
 // ─── MAIN EXPORT ───────────────────────────────
 export async function ariaSpeak(text) {
-  if (!text || text.trim() === '') return;
+  if (!text || text.trim() === '') return false;
 
   const clean = cleanForSpeech(text);
-  if (!clean) return;
+  if (!clean) return false;
 
-  // 1) Try ElevenLabs first (server tries Google TTS internally)
+  // Try server TTS (server tries Google TTS, then ElevenLabs internally)
+  const serverResult = await elevenLabsSpeak(clean);
+  if (serverResult) return true;
+
+  // Fall back to browser TTS
+  console.log('[Aria TTS] Falling back to browser TTS');
   try {
-    await elevenLabsSpeak(clean);
-    return;
+    await browserSpeak(clean);
+    return true;
   } catch (err) {
-    if (err.message === 'TTS_UNAVAILABLE') {
-      console.warn('Aria: All server TTS providers unavailable → browser TTS');
-    } else {
-      console.warn('Aria: ElevenLabs unavailable →', err.message);
-    }
+    console.error('[Aria TTS] Browser TTS also failed:', err.message);
+    return false;
   }
-
-  // 2) Fall back to browser TTS (basic)
-  await browserSpeak(clean);
 }
 
 // Stop any current speech

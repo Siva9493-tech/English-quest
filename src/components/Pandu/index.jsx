@@ -322,6 +322,7 @@ export default function Pandu() {
       if (!sessionRef.current) return
 
       const clean = (userSpeech || '').trim()
+      console.log('[Aria Debug] User said:', clean ? clean.substring(0, 80) : '(silence)')
       if (!clean) {
         setTimeout(startConversationLoop, RETRY_AFTER_SILENCE_MS)
         return
@@ -434,12 +435,21 @@ export default function Pandu() {
 
       if (!sessionRef.current) return
 
+      console.log('[Aria Debug] Groq reply length:', reply?.length || 0, 'First 80 chars:', reply?.substring(0, 80))
+
       appendMessage('model', reply)
       logCorrectionFromReply(reply)
       showPanduPill(reply)
 
       setConvState(STATES.SPEAKING)
-      await ariaSpeak(reply)
+      const ttsOk = await ariaSpeak(reply)
+      console.log('[Aria Debug] TTS result:', ttsOk ? '✅ spoken' : '❌ failed')
+
+      // If voice failed entirely, at least show the reply as text so the
+      // conversation never silently stalls.
+      if (!ttsOk) {
+        showPanduPill('💬 ' + reply.substring(0, 120) + (reply.length > 120 ? '…' : ''))
+      }
 
       await sleep(TURN_GAP_MS)
       if (sessionRef.current) startConversationLoop()

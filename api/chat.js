@@ -26,6 +26,17 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Quick health check — confirms env wiring without hitting Groq.
+  if (req.body?.__diagnose) {
+    return res.status(200).json({
+      groqKey: process.env.GROQ_API_KEY
+        ? 'present (length: ' + process.env.GROQ_API_KEY.length + ')'
+        : 'MISSING',
+      nodeEnv: process.env.NODE_ENV || 'not set',
+      region: process.env.VERCEL_REGION || 'unknown',
+    });
+  }
+
   if (!process.env.GROQ_API_KEY) {
     return res.status(500).json({ error: 'GROQ_API_KEY is not configured' });
   }

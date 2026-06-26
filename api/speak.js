@@ -3,6 +3,15 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Quick health check — confirms which TTS providers are configured.
+  if (req.body?.__diagnose) {
+    return res.status(200).json({
+      googleKey: process.env.GOOGLE_TTS_API_KEY ? 'present' : 'MISSING',
+      elevenKey: process.env.ELEVENLABS_API_KEY ? 'present' : 'MISSING',
+      elevenVoiceId: process.env.ELEVENLABS_VOICE_ID || 'MISSING',
+    });
+  }
+
   const { text, voiceId } = req.body;
   
   if (!text || text.trim() === '') {
