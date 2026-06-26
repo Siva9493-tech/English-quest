@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { getUserAccent, setUserAccent } from './Pandu/AccentTrainer'
 
@@ -9,6 +10,19 @@ const links = [
 ]
 
 export default function Navbar({ theme, onToggleTheme }) {
+  const [isOffline, setIsOffline] = useState(!navigator.onLine)
+
+  useEffect(() => {
+    const goOnline = () => setIsOffline(false)
+    const goOffline = () => setIsOffline(true)
+    window.addEventListener('online', goOnline)
+    window.addEventListener('offline', goOffline)
+    return () => {
+      window.removeEventListener('online', goOnline)
+      window.removeEventListener('offline', goOffline)
+    }
+  }, [])
+
   const handleAccentToggle = () => {
     const current = getUserAccent()
     const newAccent = current === 'british' ? 'american' : 'british'
@@ -41,11 +55,24 @@ export default function Navbar({ theme, onToggleTheme }) {
         </NavLink>
       ))}
 
+      {isOffline && (
+        <span
+          className="ml-auto flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-bold"
+          style={{
+            background: 'rgba(239,68,68,0.15)',
+            color: '#ef4444',
+            border: '1px solid rgba(239,68,68,0.3)',
+          }}
+        >
+          ● Offline
+        </span>
+      )}
+
       <button
         type="button"
         onClick={handleAccentToggle}
         title="Switch accent"
-        className="ml-auto flex shrink-0 items-center gap-1.5 rounded-full transition-all hover:scale-105"
+        className={`${isOffline ? '' : 'ml-auto '}flex shrink-0 items-center gap-1.5 rounded-full transition-all hover:scale-105`}
         style={{
           padding: '4px 12px',
           fontSize: '12px',

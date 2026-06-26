@@ -4,6 +4,7 @@
 import { getCorrections } from './PanduMemory'
 import { getAriaMemory, buildMemoryContext } from './AriaMemory'
 import { getUserAccent, buildAccentSystemPrompt } from './AccentTrainer'
+import { fetchWithTimeout } from '../../utils/fetchWithTimeout'
 
 // All Groq traffic now flows through our own /api/chat serverless proxy,
 // which holds GROQ_API_KEY server-side. No API key is exposed to the browser.
@@ -12,7 +13,7 @@ const MODEL = 'llama-3.3-70b-versatile'
 
 // Low-level call: send a messages[] array to the proxy, return the reply text.
 async function chatCompletion(messages, { maxTokens = 150, temperature = 0.8 } = {}) {
-  const response = await fetch(CHAT_URL, {
+  const response = await fetchWithTimeout(CHAT_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -23,7 +24,7 @@ async function chatCompletion(messages, { maxTokens = 150, temperature = 0.8 } =
       max_tokens: maxTokens,
       temperature,
     }),
-  })
+  }, 10000)
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}))

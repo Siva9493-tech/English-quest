@@ -23,8 +23,6 @@ export default async function handler(req, res) {
   
   if (googleKey) {
     try {
-      console.log('Trying Google TTS...');
-      
       const googleRes = await fetch(
         `https://texttospeech.googleapis.com/v1/text:synthesize?key=${googleKey}`,
         {
@@ -50,7 +48,6 @@ export default async function handler(req, res) {
       if (googleRes.ok) {
         const data = await googleRes.json();
         const audioBuffer = Buffer.from(data.audioContent, 'base64');
-        console.log('Google TTS success ✅');
         res.setHeader('Content-Type', 'audio/mpeg');
         res.setHeader('Content-Length', audioBuffer.length);
         res.setHeader('X-TTS-Provider', 'google');
@@ -62,8 +59,6 @@ export default async function handler(req, res) {
     } catch (err) {
       console.warn('Google TTS error:', err.message);
     }
-  } else {
-    console.log('No GOOGLE_TTS_API_KEY — skipping Google TTS');
   }
 
   // ── OPTION 2: ElevenLabs fallback ───────────────────
@@ -71,8 +66,6 @@ export default async function handler(req, res) {
   
   if (elevenKey) {
     try {
-      console.log('Falling back to ElevenLabs...');
-      
       const finalVoiceId = voiceId ||
         process.env.ELEVENLABS_VOICE_ID ||
         'EXAVITQu4vr4xnSDxMaL'; // Sarah
@@ -101,7 +94,6 @@ export default async function handler(req, res) {
 
       if (elevenRes.ok) {
         const buffer = await elevenRes.arrayBuffer();
-        console.log('ElevenLabs success ✅');
         res.setHeader('Content-Type', 'audio/mpeg');
         res.setHeader('Content-Length', buffer.byteLength);
         res.setHeader('X-TTS-Provider', 'elevenlabs');
@@ -113,12 +105,10 @@ export default async function handler(req, res) {
     } catch (err) {
       console.warn('ElevenLabs error:', err.message);
     }
-  } else {
-    console.log('No ELEVENLABS_API_KEY — skipping ElevenLabs');
   }
 
   // ── OPTION 3: Both failed ────────────────────────────
-  console.error('All TTS providers failed');
+  console.warn('All TTS providers failed');
   return res.status(503).json({ 
     error: 'TTS_UNAVAILABLE',
     message: 'All voice providers failed — browser TTS will be used'

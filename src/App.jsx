@@ -7,6 +7,7 @@ import {
   useLocation,
 } from 'react-router-dom'
 import Navbar from './components/Navbar'
+import ErrorBoundary from './components/ErrorBoundary'
 import Pandu from './components/Pandu'
 import Home from './pages/Home'
 import ModuleMap from './pages/ModuleMap'
@@ -21,14 +22,6 @@ import { getPanduUser } from './components/Pandu/PanduMemory'
 import { getSession, onAuthStateChange } from './utils/auth'
 import { registerAutoSync, syncPending } from './utils/database'
 import { isSupabaseReady } from './utils/supabase'
-
-// Verify the Supabase URL is a real project URL (not a placeholder) on app start.
-console.log(
-  'Supabase URL:',
-  import.meta.env.VITE_SUPABASE_URL?.includes('supabase.co')
-    ? 'correct ✅'
-    : 'wrong URL ❌',
-)
 
 export default function App() {
   // Auth session: undefined = still loading, null = signed out, object = signed in.
@@ -167,6 +160,7 @@ export default function App() {
           <Navbar theme={theme} onToggleTheme={toggleTheme} />
         )}
         <main className="mx-auto max-w-4xl p-6">
+          <ErrorBoundary>
           <Routes>
             {/* Auth route: bounce to home if already signed in. */}
             <Route
@@ -204,6 +198,7 @@ export default function App() {
               element={<RequireAuth session={session}><Capstone /></RequireAuth>}
             />
           </Routes>
+          </ErrorBoundary>
         </main>
         {(session || !isSupabaseReady) && <Pandu />}
       </div>

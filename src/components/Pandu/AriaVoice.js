@@ -2,6 +2,8 @@
 // Human-sounding TTS for Aria
 // Priority: Google TTS → ElevenLabs → Browser TTS
 
+import { fetchWithTimeout } from '../../utils/fetchWithTimeout';
+
 // ─── ELEVENLABS (SECONDARY) ──────────────────────
 // The API key lives server-side; the browser talks to our /api/speak proxy.
 // VOICE_ID is not secret, so it can still come from a build-time env var.
@@ -9,7 +11,7 @@ const VOICE_ID =
   import.meta.env.VITE_ELEVENLABS_VOICE_ID || 'EXAVITQu4vr4xnSDxMaL'; // Sarah (premade)
 
 async function elevenLabsSpeak(text) {
-  const response = await fetch('/api/speak', {
+  const response = await fetchWithTimeout('/api/speak', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -24,7 +26,7 @@ async function elevenLabsSpeak(text) {
         use_speaker_boost: true,
       },
     }),
-  });
+  }, 8000);
 
   if (response.status === 503) {
     const err = await response.json();

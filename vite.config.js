@@ -124,8 +124,20 @@ export default defineConfig(({ mode }) => {
         },
       }),
     ],
-    esbuild: {
-      drop: mode === 'production' ? ['console', 'debugger'] : [],
+    build: {
+      minify: 'terser',
+      terserOptions: {
+        compress: {
+          drop_console: true,
+          drop_debugger: true,
+          pure_funcs: ['console.log', 'console.info', 'console.debug', 'console.warn', 'console.error'],
+          passes: 2,
+        },
+        mangle: true,
+        format: {
+          comments: false,
+        },
+      },
     },
     server: {
       port: 5173,
