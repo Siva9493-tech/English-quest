@@ -35,6 +35,10 @@ import {
   updateMemoryAfterSession,
   checkMemoryMilestones,
 } from './AriaMemory'
+import {
+  filterDueCorrections,
+  getCorrectionStats,
+} from '../../utils/spacedRepetition'
 import { getStats } from '../../utils/progress'
 import { getUserAccent, getDailyPhrase } from './AccentTrainer'
 import { captureEvent, identifyUser } from '../../utils/analytics'
@@ -538,6 +542,17 @@ export default function Pandu() {
       appendMessage('model', phraseIntro)
       showPanduPill(phraseIntro)
       await ariaSpeak(phraseIntro)
+    }
+
+    // Surface due corrections at session start
+    if (sessionRef.current) {
+      const allCorrections = getCorrections()
+      const due = filterDueCorrections(allCorrections)
+      if (due.length > 0) {
+        const dueMsg = `📝 Heads up — you have ${due.length} past ${due.length === 1 ? 'correction' : 'corrections'} due for review. Don't worry, I'll test you gently if it comes up!`
+        appendMessage('model', dueMsg)
+        showPanduPill(dueMsg)
+      }
     }
 
     if (sessionRef.current) startConversationLoop()

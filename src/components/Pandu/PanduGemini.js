@@ -2,6 +2,7 @@
 // (File name kept as PanduGemini.js so existing imports keep working.)
 
 import { getCorrections } from './PanduMemory'
+import { filterDueCorrections } from '../../utils/spacedRepetition'
 import { getAriaMemory, buildMemoryContext } from './AriaMemory'
 import { getUserAccent, buildAccentSystemPrompt } from './AccentTrainer'
 import { fetchWithTimeout } from '../../utils/fetchWithTimeout'
@@ -51,12 +52,19 @@ export async function askPandu(userMessage, userData, progressData, history) {
     const progress = progressData || 'beginner'
 
     // Pull recent corrections so Aria remembers what to watch for.
-    const recentCorrections = getCorrections()
+    const allCorrections = getCorrections()
+    const dueCorrections = filterDueCorrections(allCorrections)
+    const recentCorrections = allCorrections
       .slice(-5)
       .map((c) => `"${c.wrong}" → "${c.correct}"`)
       .join(', ')
     const correctionContext = recentCorrections
       ? `\nRecent mistakes to watch: ${recentCorrections}`
+      : ''
+
+    // Build a special "due for review" context
+    const dueContext = dueCorrections.length > 0
+      ? `\nREVIEW TIME: The following mistakes are DUE for review in this session — gently test the user on them if it comes up naturally:\n${dueCorrections.slice(0, 5).map((c) => `  - "${c.wrong}" → correct: "${c.correct}"`).join('\n')}`
       : ''
 
     // Cross-session memory: what Aria remembers about this user over time.
@@ -104,7 +112,7 @@ WHAT YOU NEVER DO:
 - Never start with "Great question!"
 - Never be formal or stiff
 - Never correct twice in one reply
-- Never make user feel bad about mistakes${correctionContext}${memoryContext}${accentContext}`
+- Never make user feel bad about mistakes${correctionContext}${dueContext}${memoryContext}${accentContext}`
 
     const conversationModePrompt = isConversationMode ? `
 CONVERSATION MODE RULES:

@@ -124,14 +124,30 @@ export function addWordToLog(word) {
 export function saveCorrection(wrong, correct, date) {
   try {
     const corrections = getCorrections()
-    corrections.push({
-      wrong,
-      correct,
-      date: date || new Date().toDateString(),
-      count: 1,
-    })
-    // Keep only the last 50 corrections.
-    const trimmed = corrections.slice(-50)
+    // Check if this same correction already exists
+    const existing = corrections.find(
+      (c) => c.wrong.toLowerCase() === wrong.toLowerCase()
+    )
+    if (existing) {
+      // Increment count and reset SRS (they made it again)
+      existing.count = (existing.count || 1) + 1
+      existing.date = date || new Date().toDateString()
+      existing.nextReview = Date.now() // due immediately since they still need help
+    } else {
+      corrections.push({
+        wrong,
+        correct,
+        date: date || new Date().toDateString(),
+        count: 1,
+        // SRS fields
+        repetitions: 0,
+        ease: 2.5,
+        interval: 0,
+        nextReview: Date.now(), // due immediately
+        created: Date.now(),
+      })
+    }
+    const trimmed = corrections.slice(-100)
     localStorage.setItem(KEYS.corrections, JSON.stringify(trimmed))
   } catch (e) {
     console.error(e)

@@ -5,7 +5,10 @@
       "Bash(netstat -ano)",
       "WebSearch",
       "Bash(npm install *)",
-      "Read(//Users/dev/**)"
+      "Read(//Users/dev/**)",
+      "Bash(git add *)",
+      "Bash(git commit -m 'add SM-2 spaced repetition for corrections — past mistakes now resurfaces at optimal intervals *)",
+      "Bash(git push *)"
     ]
   }
 }
