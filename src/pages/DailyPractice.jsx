@@ -25,6 +25,34 @@ const PHASES = [
 const PRACTICE_PHASE_INDEX = 2
 const TOTAL_MINUTES = PHASES.reduce((sum, p) => sum + p.minutes, 0)
 
+const PHASE_INSTRUCTIONS = {
+  0: { // Learn phase
+    emoji: '📺',
+    title: 'Active Learning',
+    instruction: 'Watch the video above. Pause every 3 minutes and note exactly 3 new things — a word, a rule, or a phrase the creator used.',
+    tip: '💡 Tip: Write on paper, not phone. Your brain remembers better.',
+    color: 'rgba(0, 229, 255, 0.1)',
+    border: 'rgba(0, 229, 255, 0.3)',
+  },
+  1: { // Shadow phase
+    emoji: '🗣️',
+    title: 'Shadowing',
+    instruction: 'Rewind the video 30 seconds. Press play and speak along with the creator — match their exact speed, tone, pauses and accent. Do this 3 times.',
+    tip: '💡 Tip: Don\'t just listen — move your lips and speak out loud every time.',
+    color: 'rgba(191, 0, 255, 0.1)',
+    border: 'rgba(191, 0, 255, 0.3)',
+  },
+  2: { // Practice phase
+    emoji: '🎙️',
+    title: 'Speak with Aria',
+    instruction: 'Close the video. Speak only in English for the next 15 minutes using what you just learned. Aria will listen, correct and guide you.',
+    tip: '💡 Tap the Aria button below to start your practice session now!',
+    color: 'rgba(34, 197, 94, 0.1)',
+    border: 'rgba(34, 197, 94, 0.3)',
+    showAriaButton: true,
+  },
+};
+
 function format(totalSeconds) {
   const m = Math.floor(totalSeconds / 60)
   const s = totalSeconds % 60
@@ -200,6 +228,82 @@ function PracticeSession({ subTopic }) {
             Reset
           </button>
         </div>
+
+        {/* Phase Instruction Card */}
+        {(() => {
+          const phase = PHASE_INSTRUCTIONS[phaseIndex] || PHASE_INSTRUCTIONS[0];
+          return (
+            <div style={{
+              background: phase.color,
+              border: `1px solid ${phase.border}`,
+              borderRadius: '14px',
+              padding: '18px 20px',
+              marginTop: '16px',
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                marginBottom: '10px',
+              }}>
+                <span style={{ fontSize: '24px' }}>{phase.emoji}</span>
+                <span style={{
+                  color: 'var(--text-primary)',
+                  fontWeight: '800',
+                  fontSize: '15px',
+                }}>
+                  {phase.title}
+                </span>
+              </div>
+              <p style={{
+                color: 'var(--text-primary)',
+                fontSize: '14px',
+                lineHeight: '1.6',
+                margin: '0 0 10px',
+              }}>
+                {phase.instruction}
+              </p>
+              <p style={{
+                color: 'var(--text-muted)',
+                fontSize: '12px',
+                margin: 0,
+                fontStyle: 'italic',
+              }}>
+                {phase.tip}
+              </p>
+              
+              {/* Aria button for Practice phase */}
+              {phase.showAriaButton && (
+                <button
+                  onClick={() => {
+                    // Trigger Aria session start
+                    // Find and click the Aria floating button
+                    const ariaBtn = document.querySelector('[data-aria-button]');
+                    if (ariaBtn) ariaBtn.click();
+                  }}
+                  style={{
+                    marginTop: '14px',
+                    width: '100%',
+                    padding: '12px',
+                    background: 'linear-gradient(135deg, #22c55e, #00e5ff)',
+                    color: '#0a0a0f',
+                    fontWeight: '800',
+                    fontSize: '14px',
+                    border: 'none',
+                    borderRadius: '10px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                  }}
+                >
+                  🎙️ Start Talking with Aria →
+                </button>
+              )}
+            </div>
+          );
+        })()}
       </section>
 
       {inPractice ? (

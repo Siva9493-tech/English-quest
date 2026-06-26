@@ -199,6 +199,7 @@ export default function PanduButton({
         onPointerUp={handlePointerUp}
         onContextMenu={handleContextMenu}
         aria-label={sessionActive ? 'End conversation with Aria' : 'Talk to Aria'}
+        data-aria-button="true"
         className="relative flex h-16 w-16 items-center justify-center rounded-full bg-white shadow-xl transition-transform active:scale-95"
         style={{
           border: `3px solid ${borderColor}`,

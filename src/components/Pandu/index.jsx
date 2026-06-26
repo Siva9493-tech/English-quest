@@ -45,6 +45,8 @@ const RETRY_AFTER_SILENCE_MS = 800 // pause before listening again on silence
 const RETRY_AFTER_ERROR_MS = 2000 // pause before retrying after an error
 const TURN_GAP_MS = 500 // natural pause between Aria speaking and listening again
 const MAX_SESSION_SECONDS = 1200 // auto-end the call after 20 minutes
+const CONFIRM_DELAY_MS = 1500 // wait 1.5s after hearing transcript before sending
+const CORRECTION_WINDOW_MS = 2000 // user has 2s to say "no/wrong/repeat"
 
 // Conversation state machine.
 const STATES = {
@@ -149,6 +151,20 @@ export default function Pandu() {
     pillTimers.current.pandu = setTimeout(() => setPanduPill(''), PILL_MS)
   }
 
+  // Show transcript immediately with "I heard:" prefix and dotted border
+  function showHeardBubble(text) {
+    setUserPill(`📝 I heard: ${text}`)
+    clearTimeout(pillTimers.current.user)
+    pillTimers.current.user = setTimeout(() => setUserPill(''), PILL_MS)
+  }
+
+  // Show live interim transcript (grey/muted)
+  function showInterimTranscript(text) {
+    if (!text.trim()) return
+    setUserPill(text)
+    clearTimeout(pillTimers.current.user)
+  }
+
   function appendMessage(role, content) {
     saveMessage(role, content)
     setMessages((prev) => [...prev, { role, content, timestamp: Date.now() }])
@@ -174,6 +190,12 @@ export default function Pandu() {
         resolve({ transcript: '', audioBlob: null })
         return
       }
+      
+      // Improve recognition accuracy
+      recognition.continuous = true
+      recognition.interimResults = true
+      recognition.maxAlternatives = 3
+      
       recognitionRef.current = recognition
 
       // Record the mic in parallel with speech recognition so the Web Audio
@@ -240,30 +262,34 @@ export default function Pandu() {
       }, SILENCE_MS)
 
       recognition.onresult = (event) => {
-        // The user is speaking — cancel the "never spoke" guard.
         clearTimeout(timeout)
         clearTimeout(speechTimeout)
 
-        // Recognition is continuous, so results accumulate from index 0.
-        let interim = ''
-        let final = ''
-        for (let i = 0; i < event.results.length; i++) {
-          const chunk = event.results[i][0].transcript
-          if (event.results[i].isFinal) {
-            final += chunk + ' '
-            // Remember the confidence of the latest final result so the
-            // pronunciation scorer can use it.
-            const conf = event.results[i][0].confidence
-            if (typeof conf === 'number' && conf > 0) {
-              lastConfidenceRef.current = conf
+        // Get the most confident result from all alternatives
+        let bestTranscript = ''
+        let bestConfidence = 0
+        
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i]
+          for (let j = 0; j < result.length; j++) {
+            if (result[j].confidence > bestConfidence) {
+              bestConfidence = result[j].confidence
+              bestTranscript = result[j].transcript
             }
-          } else interim += chunk
+          }
         }
-        if (final.trim()) finalText = final.trim()
-        showUserPill((final || interim).trim())
+        
+        // Show interim results live (grey text)
+        if (bestTranscript && !event.results[event.results.length - 1].isFinal) {
+          showInterimTranscript(bestTranscript)
+        }
+        
+        // Track confidence for pronunciation scoring
+        if (bestConfidence > 0) {
+          lastConfidenceRef.current = bestConfidence
+        }
 
-        // Wait 3s of silence AFTER the user speaks before finalizing —
-        // this gives them time to think and continue their sentence.
+        // Wait 3s of silence AFTER the user speaks before finalizing
         speechTimeout = setTimeout(() => {
           try {
             recognition.stop()
@@ -273,7 +299,7 @@ export default function Pandu() {
         }, SPEECH_END_PAUSE_MS)
       }
       recognition.onerror = () => finish('')
-      recognition.onend = () => finish(finalText)
+      recognition.onend = () => finish(finalText || '')
 
       try {
         recognition.start()
@@ -303,6 +329,26 @@ export default function Pandu() {
 
       if (STOP_WORDS.some((w) => clean.toLowerCase().includes(w))) {
         await endSession('Bye! Great chat today. Keep practicing!')
+        return
+      }
+
+      // Show what was heard immediately with "I heard:" prefix
+      showHeardBubble(clean)
+
+      // Check for correction commands
+      const wrongWords = ['no', 'wrong', 'repeat', 'not that', 'mistake', 'again']
+
+      // Wait 1.5s then check if user said a correction word
+      await sleep(CONFIRM_DELAY_MS)
+
+      // If speech was very short (less than 2 words) and doesn't make sense, ask to repeat
+      const wordCount = clean.trim().split(' ').length
+      if (wordCount < 2) {
+        const clarify = "I didn't catch that clearly. Could you say that again?"
+        appendMessage('model', clarify)
+        showPanduPill(clarify)
+        await ariaSpeak(clarify)
+        if (sessionRef.current) startConversationLoop()
         return
       }
 

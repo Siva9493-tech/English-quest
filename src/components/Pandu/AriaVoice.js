@@ -1,44 +1,14 @@
 // AriaVoice.js
 // Human-sounding TTS for Aria
-// Priority: ElevenLabs → best available browser voice
-//
-// Note: Kokoro-82M (onnx-community/Kokoro-82M-v1.0) was previously the
-// middle tier, but the model is now gated on HuggingFace and returns 401
-// without an authenticated account. We skip it entirely and fall straight
-// through to browser TTS so there are no failed downloads on every load.
+// Priority: Google TTS → ElevenLabs → Browser TTS
 
-// ─── ELEVENLABS (PRIMARY) ──────────────────────
+// ─── ELEVENLABS (SECONDARY) ──────────────────────
 // The API key lives server-side; the browser talks to our /api/speak proxy.
 // VOICE_ID is not secret, so it can still come from a build-time env var.
 const VOICE_ID =
   import.meta.env.VITE_ELEVENLABS_VOICE_ID || 'EXAVITQu4vr4xnSDxMaL'; // Sarah (premade)
 
-// Track monthly character usage to stay under the free tier limit
-function checkElevenLabsBudget(text) {
-  // Reset counter when the month changes
-  const thisMonth = String(new Date().getMonth());
-  const lastReset = localStorage.getItem('elevenLabsReset');
-  if (lastReset !== thisMonth) {
-    localStorage.setItem('elevenLabsChars', '0');
-    localStorage.setItem('elevenLabsReset', thisMonth);
-  }
-
-  const charCount = parseInt(
-    localStorage.getItem('elevenLabsChars') || '0',
-    10,
-  );
-
-  if (charCount + text.length > 9000) {
-    // Near the limit — skip to browser TTS
-    throw new Error('Monthly limit approaching');
-  }
-
-  localStorage.setItem('elevenLabsChars', String(charCount + text.length));
-}
-
 async function elevenLabsSpeak(text) {
-  checkElevenLabsBudget(text);
-
   const response = await fetch('/api/speak', {
     method: 'POST',
     headers: {
@@ -55,6 +25,13 @@ async function elevenLabsSpeak(text) {
       },
     }),
   });
+
+  if (response.status === 503) {
+    const err = await response.json();
+    if (err.error === 'TTS_UNAVAILABLE') {
+      throw new Error('TTS_UNAVAILABLE');
+    }
+  }
 
   if (!response.ok) throw new Error('ElevenLabs failed');
 
@@ -142,6 +119,7 @@ function cleanForSpeech(text) {
       .replace(/\[📊[^\]]*\]/g, '')
       .replace(/\[💬[^\]]*\]/g, '')
       .replace(/\[⏱️[^\]]*\]/g, '')
+      .replace(/\[🔤[^\]]*\]/g, '')
       // Remove markdown
       .replace(/\*\*/g, '')
       .replace(/\*/g, '')
@@ -159,12 +137,16 @@ export async function ariaSpeak(text) {
   const clean = cleanForSpeech(text);
   if (!clean) return;
 
-  // 1) Try ElevenLabs first (best quality)
+  // 1) Try ElevenLabs first (server tries Google TTS internally)
   try {
     await elevenLabsSpeak(clean);
     return;
   } catch (err) {
-    console.warn('Aria: ElevenLabs unavailable →', err.message);
+    if (err.message === 'TTS_UNAVAILABLE') {
+      console.warn('Aria: All server TTS providers unavailable → browser TTS');
+    } else {
+      console.warn('Aria: ElevenLabs unavailable →', err.message);
+    }
   }
 
   // 2) Fall back to browser TTS (basic)
