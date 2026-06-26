@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import fs from 'node:fs'
 import path from 'node:path'
+import terser from '@rollup/plugin-terser'
 
 // Read the whole request body and return it as a string.
 function readBody(req) {
@@ -123,10 +124,7 @@ export default defineConfig(({ mode }) => {
           ],
         },
       }),
-    ],
-    build: {
-      minify: 'terser',
-      terserOptions: {
+      mode === 'production' && terser({
         compress: {
           drop_console: true,
           drop_debugger: true,
@@ -137,7 +135,10 @@ export default defineConfig(({ mode }) => {
         format: {
           comments: false,
         },
-      },
+      }),
+    ],
+    build: {
+      minify: false,
     },
     server: {
       port: 5173,

@@ -327,7 +327,7 @@ function PanelInner({
                     ? '⚡ Fast'
                     : '🐢 Slow'}
               </span>
-              {pronScore && <span>🗣️ Pron: {pronScore}%</span>}
+              {pronScore && <span>🎯 Clarity: {pronScore}%</span>}
               {audioQuality && (
                 <span title={audioQuality.feedback}>
                   🎚️ Clarity: {audioQuality.score}%

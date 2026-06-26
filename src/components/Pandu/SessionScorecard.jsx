@@ -225,7 +225,7 @@ export default function SessionScorecard({ onClose }) {
                     : '#ff006e',
             },
             {
-              label: 'Pronunciation',
+              label: 'Clarity',
               value: avgPronScore ? avgPronScore + '%' : 'N/A',
               icon: '🗣️',
               color:

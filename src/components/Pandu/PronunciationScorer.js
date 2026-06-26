@@ -2,6 +2,10 @@
 // Detects likely pronunciation issues from
 // speech-to-text transcripts
 // Uses common Indian English pronunciation patterns
+//
+// Note: this scans transcripts for known mispronunciation patterns. It detects
+// whether the user SAID a tricky word, not how well they PRONOUNCED it —
+// confidence and pattern-matching only.
 
 // Words commonly mispronounced by Indian speakers
 // format: { word, issue, correct, tip }
@@ -122,7 +126,7 @@ export function getPronunciationTip(transcript) {
   const hasTh = detectThIssues(transcript)
 
   // Prioritize TH sound as it's most common issue
-  if (hasTh && Math.random() > 0.6) {
+  if (hasTh) {
     return `[🔤 Pronunciation note: Make sure the TH sounds in words like "the" and "this" use your tongue between your teeth — a common thing to practice!]`
   }
 
