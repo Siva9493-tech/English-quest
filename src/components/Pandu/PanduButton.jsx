@@ -65,7 +65,7 @@ export default function PanduButton({
   const loadingTimerRef = useRef(null)
   const pollRef = useRef(null)
 
-  // On first ever visit the Kokoro voice model downloads in the background.
+  // On first ever visit the voice model downloads in the background.
   // Poll for the "ariaVoiceLoaded" flag and hide the indicator once it's set
   // (or give up after the timeout, e.g. when it falls back to browser TTS).
   useEffect(() => {

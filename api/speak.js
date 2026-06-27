@@ -1,62 +1,123 @@
-// Vercel serverless function — proxies text-to-speech to ElevenLabs.
-// Keeps ELEVENLABS_API_KEY server-side so it is never shipped to the browser.
+// Vercel serverless function — text-to-speech proxy with a 3-tier pipeline.
+// Keeps all API keys server-side so they are never shipped to the browser.
 
-const DEFAULT_VOICE_ID = 'EXAVITQu4vr4xnSDxMaL'; // Sarah (premade)
+const PROVIDER_TIMEOUT_MS = 10000; // max wait per provider
+
+async function fetchWithTimeout(url, options, timeoutMs = PROVIDER_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function googleTTS(text) {
+  const key = process.env.GOOGLE_TTS_API_KEY;
+  if (!key) throw new Error('GOOGLE_TTS_API_KEY not configured');
+
+  const response = await fetchWithTimeout(
+    `https://texttospeech.googleapis.com/v1/text:synthesize?key=${key}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        input: { text },
+        voice: { languageCode: 'en-US', name: 'en-US-Neural2-F' },
+        audioConfig: { audioEncoding: 'MP3', speakingRate: 0.95, pitch: 1.0 },
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '');
+    throw new Error(`Google TTS ${response.status}: ${detail.slice(0, 200)}`);
+  }
+
+  const data = await response.json();
+  if (!data.audioContent) throw new Error('Google TTS returned no audioContent');
+
+  return Buffer.from(data.audioContent, 'base64');
+}
+
+async function elevenLabsTTS(text) {
+  const key = process.env.ELEVENLABS_API_KEY;
+  const voiceId = process.env.ELEVENLABS_VOICE_ID;
+  if (!key || !voiceId) throw new Error('ElevenLabs API keys not configured');
+
+  const response = await fetchWithTimeout(
+    `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+    {
+      method: 'POST',
+      headers: {
+        'xi-api-key': key,
+        'Content-Type': 'application/json',
+        Accept: 'audio/mpeg',
+      },
+      body: JSON.stringify({
+        text,
+        model_id: 'eleven_monolingual_v1',
+        voice_settings: {
+          stability: 0.5,
+          similarity_boost: 0.75,
+        },
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => '');
+    throw new Error(`ElevenLabs ${response.status}: ${detail.slice(0, 200)}`);
+  }
+
+  return Buffer.from(await response.arrayBuffer());
+}
 
 export default async function handler(req, res) {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  if (!process.env.ELEVENLABS_API_KEY) {
-    return res.status(500).json({ error: 'ELEVENLABS_API_KEY is not configured' });
-  }
-
-  const { text, voiceId, voice_settings } = req.body || {};
-
+  const { text } = req.body || {};
   if (!text || typeof text !== 'string') {
-    return res.status(400).json({ error: 'text is required' });
+    return res.status(400).json({ error: 'No text provided' });
   }
 
-  const voice =
-    voiceId || process.env.ELEVENLABS_VOICE_ID || DEFAULT_VOICE_ID;
-
+  // 1. Try Google Cloud TTS FIRST
   try {
-    const response = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voice}`,
-      {
-        method: 'POST',
-        headers: {
-          'xi-api-key': process.env.ELEVENLABS_API_KEY,
-          'Content-Type': 'application/json',
-          Accept: 'audio/mpeg',
-        },
-        body: JSON.stringify({
-          text,
-          model_id: 'eleven_turbo_v2',
-          voice_settings: voice_settings || {
-            stability: 0.5,
-            similarity_boost: 0.8,
-            style: 0.3,
-            use_speaker_boost: true,
-          },
-        }),
-      },
-    );
-
-    if (!response.ok) {
-      const detail = await response.text().catch(() => '');
-      console.error('ElevenLabs error:', response.status, detail);
-      return res
-        .status(response.status)
-        .json({ error: 'ElevenLabs request failed' });
-    }
-
-    const buffer = await response.arrayBuffer();
+    const buffer = await googleTTS(text);
+    console.log('[TTS] Using provider: google');
     res.setHeader('Content-Type', 'audio/mpeg');
-    return res.send(Buffer.from(buffer));
+    res.setHeader('X-TTS-Provider', 'google');
+    return res.send(buffer);
   } catch (err) {
-    console.error('ElevenLabs proxy error:', err);
-    return res.status(502).json({ error: 'Upstream request failed' });
+    console.warn('[TTS] Google TTS failed:', err.message);
   }
+
+  // 2. Try ElevenLabs FALLBACK
+  try {
+    const buffer = await elevenLabsTTS(text);
+    console.log('[TTS] Using provider: elevenlabs');
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('X-TTS-Provider', 'elevenlabs');
+    return res.send(buffer);
+  } catch (err) {
+    console.warn('[TTS] ElevenLabs failed:', err.message);
+  }
+
+  // 3. Both failed, return JSON error for browser fallback
+  console.log('[TTS] Both server providers failed, returning browser fallback');
+  return res.status(502).json({ error: 'tts_failed', fallback: 'browser' });
 }

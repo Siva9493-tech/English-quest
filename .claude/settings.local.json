@@ -5,7 +5,11 @@
       "Bash(netstat -ano)",
       "WebSearch",
       "Bash(npm install *)",
-      "Read(//Users/dev/**)"
+      "Read(//Users/dev/**)",
+      "Bash(find . -name \"TopicSelector.jsx\" -not -path \"*/node_modules/*\")",
+      "Bash(find . -name \"index.css\" -not -path \"*/node_modules/*\")",
+      "Read(//Users/**)",
+      "Read(//c/Users/HP/**)"
     ]
   }
 }

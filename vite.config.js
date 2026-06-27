@@ -41,7 +41,7 @@ function patchRes(res) {
 // against the Vite dev server, so `/api/chat` and `/api/speak` work locally
 // exactly as they do in production. Without this they 404 in dev (Vite has no
 // knowledge of Vercel functions), which makes Aria's chat fail with
-// "Connection error: HTTP 404" and TTS fall back to the browser/Kokoro voice.
+// "Connection error: HTTP 404" and TTS fall back to the browser voice.
 function devApiPlugin() {
   return {
     name: 'dev-api-functions',

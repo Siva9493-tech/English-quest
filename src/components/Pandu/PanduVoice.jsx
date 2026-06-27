@@ -1,5 +1,5 @@
 // Browser speech-recognition helpers (Web Speech API). No external cost.
-// Speech *synthesis* (Aria's voice) now lives in AriaVoice.js (Kokoro TTS).
+// Speech *synthesis* (Aria's voice) now lives in AriaVoice.js.
 
 export function isSpeechSupported() {
   return (
