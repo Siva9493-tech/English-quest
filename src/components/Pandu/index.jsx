@@ -8,6 +8,13 @@ import { createRecognition, isSpeechSupported } from './PanduVoice'
 import { ariaSpeak, stopAria } from './AriaVoice'
 import { askPandu, setConversationMode } from './PanduGemini'
 import {
+  pickPracticeType,
+  getPracticeScenario,
+  buildPracticeOpening,
+  askAriaPractice,
+  getPracticeSummary,
+} from '../../utils/ariaVoiceUtils'
+import {
   analyzeSpeech,
   getAriaFeedback,
   SessionTracker,
@@ -100,6 +107,10 @@ export default function Pandu() {
   const lastConfidenceRef = useRef(null)
   // The chosen practice topic for the active session (null = free chat).
   const selectedTopicRef = useRef(null)
+  // The chosen practice type: 'qa', 'prompt', 'roleplay' (null = free chat).
+  const practiceTypeRef = useRef(null)
+  // Current module ID for practice scenarios.
+  const moduleIdRef = useRef(null)
 
   // Clean up voice + recognition on unmount.
   useEffect(() => {
@@ -367,6 +378,10 @@ export default function Pandu() {
       setConvState(STATES.PROCESSING)
       const stats = getStats()
       const topic = selectedTopicRef.current
+      const practiceType = practiceTypeRef.current
+      const moduleId = moduleIdRef.current
+      const isPracticeMode = !!practiceType
+      
       const topicContext = topic
         ? `Today's practice topic: ${topic.title} — ${topic.desc}. Keep the conversation focused on this.`
         : 'Free conversation mode'
@@ -382,12 +397,25 @@ export default function Pandu() {
           ']'
         : clean
 
-      const reply = await askPandu(
-        messageWithFeedback,
-        getPanduUser(),
-        progressData,
-        getRecentHistory(),
-      )
+      let reply
+      if (isPracticeMode) {
+        // Use practice mode API with specialized system prompt
+        reply = await askAriaPractice(
+          messageWithFeedback,
+          practiceType,
+          moduleId,
+          getPanduUser(),
+          getRecentHistory(),
+        )
+      } else {
+        // Free chat mode
+        reply = await askPandu(
+          messageWithFeedback,
+          getPanduUser(),
+          progressData,
+          getRecentHistory(),
+        )
+      }
 
       if (!sessionRef.current) return
 
@@ -458,12 +486,28 @@ export default function Pandu() {
     recordSession()
 
     const name = userData?.nickname || userData?.name || 'friend'
-    // Free chat uses a memory-aware greeting that references past sessions;
-    // a chosen topic uses a topic-focused opener.
+    
+    // Determine module ID for practice scenarios
+    const stats = getStats()
+    const moduleId = stats?.nextSubTopic?.moduleId || 'm1'
+    moduleIdRef.current = moduleId
+    
+    // Pick practice type for structured sessions (not free chat)
+    const isFreeChat = !topic
+    let practiceType = null
+    if (!isFreeChat) {
+      practiceType = pickPracticeType()
+      practiceTypeRef.current = practiceType
+    }
+    
+    // Build greeting based on mode
     const memory = getAriaMemory()
-    const greeting = topic
-      ? `Hey ${name}! Let's practice "${topic.title}" — ${topic.desc}. I'm listening, go ahead!`
-      : generateOpeningMessage(memory, name)
+    let greeting
+    if (isFreeChat) {
+      greeting = generateOpeningMessage(memory, name)
+    } else {
+      greeting = buildPracticeOpening(practiceType, moduleId)
+    }
 
     appendMessage('model', greeting)
     showPanduPill(greeting)
@@ -491,7 +535,13 @@ export default function Pandu() {
     sessionRef.current = false
     // Capture the practiced topic before clearing it — memory needs it below.
     const sessionTopic = selectedTopicRef.current
+    const practiceType = practiceTypeRef.current
+    const moduleId = moduleIdRef.current
+    const isPracticeMode = !!practiceType
+    
     selectedTopicRef.current = null
+    practiceTypeRef.current = null
+    moduleIdRef.current = null
 
     try {
       recognitionRef.current?.abort()
@@ -567,15 +617,23 @@ export default function Pandu() {
         // ignore storage errors
       }
 
-      // Let Aria speak a short version of the feedback.
-      const { fluencyGrade, totalFillers, avgQuality } = summary
-      const spokenSummary =
-        `Great session! You scored ${fluencyGrade.grade} ` +
-        `with ${avgQuality} percent quality. ` +
-        (totalFillers === 0
-          ? 'And zero filler words — amazing!'
-          : 'Watch out for filler words next time.') +
-        ' See your full scorecard now!'
+      // Let Aria speak a wrap-up summary
+      let spokenSummary
+      if (isPracticeMode) {
+        // Use structured practice summary (2 wins + 1 improvement)
+        const practiceSummary = await getPracticeSummary(getPanduUser(), messages)
+        spokenSummary = practiceSummary
+      } else {
+        // Free chat summary
+        const { fluencyGrade, totalFillers, avgQuality } = summary
+        spokenSummary =
+          `Great session! You scored ${fluencyGrade.grade} ` +
+          `with ${avgQuality} percent quality. ` +
+          (totalFillers === 0
+            ? 'And zero filler words — amazing!'
+            : 'Watch out for filler words next time.') +
+          ' See your full scorecard now!'
+      }
 
       setConvState(STATES.SPEAKING)
       await ariaSpeak(spokenSummary)

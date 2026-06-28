@@ -1,7 +1,8 @@
-// Vercel serverless function — text-to-speech proxy with a 3-tier pipeline.
-// Keeps all API keys server-side so they are never shipped to the browser.
+// Vercel serverless function — proxies text-to-speech to Google Cloud TTS (primary)
+// with ElevenLabs fallback. Keeps all API keys server-side.
 
-const PROVIDER_TIMEOUT_MS = 10000; // max wait per provider
+const DEFAULT_VOICE_ID = 'EXAVITQu4vr4xnSDxMaL'; // Sarah (premade)
+const PROVIDER_TIMEOUT_MS = 10000;
 
 async function fetchWithTimeout(url, options, timeoutMs = PROVIDER_TIMEOUT_MS) {
   const controller = new AbortController();
@@ -41,13 +42,14 @@ async function googleTTS(text) {
   return Buffer.from(data.audioContent, 'base64');
 }
 
-async function elevenLabsTTS(text) {
+async function elevenLabsTTS(text, voiceId, voiceSettings) {
   const key = process.env.ELEVENLABS_API_KEY;
-  const voiceId = process.env.ELEVENLABS_VOICE_ID;
-  if (!key || !voiceId) throw new Error('ElevenLabs API keys not configured');
+  if (!key) throw new Error('ELEVENLABS_API_KEY not configured');
+
+  const voice = voiceId || process.env.ELEVENLABS_VOICE_ID || DEFAULT_VOICE_ID;
 
   const response = await fetchWithTimeout(
-    `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+    `https://api.elevenlabs.io/v1/text-to-speech/${voice}`,
     {
       method: 'POST',
       headers: {
@@ -57,10 +59,12 @@ async function elevenLabsTTS(text) {
       },
       body: JSON.stringify({
         text,
-        model_id: 'eleven_monolingual_v1',
-        voice_settings: {
+        model_id: 'eleven_turbo_v2',
+        voice_settings: voiceSettings || {
           stability: 0.5,
-          similarity_boost: 0.75,
+          similarity_boost: 0.8,
+          style: 0.3,
+          use_speaker_boost: true,
         },
       }),
     },
@@ -90,12 +94,13 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { text } = req.body || {};
+  const { text, voiceId, voice_settings } = req.body || {};
+
   if (!text || typeof text !== 'string') {
     return res.status(400).json({ error: 'No text provided' });
   }
 
-  // 1. Try Google Cloud TTS FIRST
+  // 1. Try Google Cloud TTS FIRST (primary - free tier generous)
   try {
     const buffer = await googleTTS(text);
     console.log('[TTS] Using provider: google');
@@ -106,9 +111,9 @@ export default async function handler(req, res) {
     console.warn('[TTS] Google TTS failed:', err.message);
   }
 
-  // 2. Try ElevenLabs FALLBACK
+  // 2. Try ElevenLabs FALLBACK (when Google fails)
   try {
-    const buffer = await elevenLabsTTS(text);
+    const buffer = await elevenLabsTTS(text, voiceId, voice_settings);
     console.log('[TTS] Using provider: elevenlabs');
     res.setHeader('Content-Type', 'audio/mpeg');
     res.setHeader('X-TTS-Provider', 'elevenlabs');

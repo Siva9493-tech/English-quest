@@ -105,6 +105,7 @@ function PanelInner({
         style={{ background: 'var(--bg-primary)' }}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Header */}
         <header
           className="flex items-center gap-3 p-4"
           style={{
@@ -131,7 +132,7 @@ function PanelInner({
           </button>
         </header>
 
-        {/* Chat history (scrolls) */}
+        {/* Chat History */}
         <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
           {totalSessions <= 1 && (
             <div
@@ -151,7 +152,7 @@ function PanelInner({
 
           {!hasHistory && (
             <div
-              className="rounded-2xl rounded-bl-sm p-3 text-sm leading-relaxed"
+              className="rounded-2xl p-3 text-sm leading-relaxed"
               style={{
                 background:
                   'linear-gradient(135deg, rgba(191,0,255,0.25), rgba(0,245,255,0.15))',
@@ -159,37 +160,15 @@ function PanelInner({
                 color: 'var(--text-primary)',
               }}
             >
-              Hey {name}! 👋 I'm Aria, your English coach. Tap the mic below to
-              start a live conversation — I'll keep listening, no need to tap
-              after every reply. Say "bye Aria" anytime to end.
+              Hey {name}! 👋 I'm Aria. Tap the mic below to start a live conversation.
             </div>
           )}
 
           {messages.map((m, i) => {
             const mine = m.role === 'user'
             return (
-              <div
-                key={i}
-                className={`flex ${mine ? 'justify-end' : 'justify-start'}`}
-              >
-                <div
-                  className="max-w-[82%] rounded-2xl px-3 py-2 text-sm shadow-sm"
-                  style={
-                    mine
-                      ? {
-                          background: '#2563eb',
-                          color: '#fff',
-                          borderBottomRightRadius: 4,
-                        }
-                      : {
-                          background:
-                            'linear-gradient(135deg, rgba(191,0,255,0.22), rgba(0,245,255,0.12))',
-                          color: 'var(--text-primary)',
-                          border: '1px solid rgba(0,245,255,0.2)',
-                          borderBottomLeftRadius: 4,
-                        }
-                  }
-                >
+              <div key={i} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                <div className={`max-w-[82%] rounded-2xl px-3 py-2 text-sm shadow-sm ${mine ? 'bg-blue-600 text-white rounded-br-none' : 'bg-slate-800 text-white rounded-bl-none border border-cyan-500/20'}`}>
                   <p>{m.content}</p>
                   <p
                     className="mt-1 text-[10px]"
@@ -201,132 +180,46 @@ function PanelInner({
               </div>
             )
           })}
-
-          {thinking && (
-            <p className="text-center text-xs font-semibold" style={{ color: '#c4b5fd' }}>
-              💭 Aria is thinking…
-            </p>
-          )}
-          {speaking && (
-            <p className="text-center text-xs font-semibold" style={{ color: 'var(--color-cyan)' }}>
-              🔊 Aria is speaking…
-            </p>
-          )}
+          {thinking && <p className="text-center text-xs font-semibold" style={{ color: '#c4b5fd' }}>💭 Aria is thinking...</p>}
+          {speaking && <p className="text-center text-xs font-semibold" style={{ color: 'var(--color-cyan)' }}>🔊 Aria is speaking...</p>}
         </div>
 
-        {/* Stats bar + floating mic */}
+        {/* Bottom Section: Mic & Stats */}
         <div style={{ position: 'relative' }}>
-          {/* Floating status pill above the mic (only while a session is active) */}
+          {/* Status Pill */}
           {sessionActive && (
-            <div
-              style={{
-                position: 'absolute',
-                top: '-58px',
-                left: '50%',
-                transform: 'translateX(-50%)',
-                zIndex: 11,
-                whiteSpace: 'nowrap',
-              }}
-              className="rounded-full px-3 py-1 text-xs font-bold shadow-lg"
-            >
-              <span
-                className="flex items-center gap-1.5 rounded-full px-3 py-1"
-                style={{
-                  background: 'var(--bg-card)',
-                  border: '1px solid var(--border-glow)',
-                  color: listening ? '#fda4af' : 'var(--text-primary)',
-                }}
-              >
-                {listening && (
-                  <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />
-                )}
-                {listening
-                  ? 'Listening… 🎙️'
-                  : thinking
-                    ? '💭 Thinking…'
-                    : '🔊 Aria speaking…'}
+            <div className="absolute -top-12 left-1/2 -translate-x-1/2 z-10 rounded-full px-3 py-1 text-xs font-bold shadow-lg" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-glow)', color: listening ? '#fda4af' : 'var(--text-primary)' }}>
+              <span className="flex items-center gap-1.5">
+                {listening && <span className="h-2 w-2 animate-pulse rounded-full bg-red-500" />}
+                {listening ? 'Listening... 🎙️' : thinking ? '💭 Thinking...' : '🔊 Aria speaking...'}
               </span>
             </div>
           )}
 
-          {/* Floating oval mic button — taps toggle the live session */}
-          <div
-            style={{
-              position: 'absolute',
-              top: '-28px',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              zIndex: 10,
-            }}
-          >
-            <button
-              type="button"
+          {/* Floating Mic Button */}
+          <div className="absolute -top-7 left-1/2 -translate-x-1/2 z-10">
+            <button 
               onClick={onToggleSession}
-              aria-label={sessionActive ? 'End conversation' : 'Start conversation'}
+              className={`flex items-center justify-center transition-all duration-300 shadow-lg ${listening ? 'animate-bounce' : ''}`}
               style={{
                 width: sessionActive ? '80px' : '64px',
                 height: '36px',
                 borderRadius: '999px',
-                background: sessionActive
-                  ? 'linear-gradient(135deg, var(--color-pink), #ff4444)'
-                  : 'linear-gradient(135deg, var(--color-cyan), var(--color-purple))',
-                border: 'none',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px',
-                fontSize: '16px',
+                background: sessionActive ? 'linear-gradient(135deg, #ec4899, #ef4444)' : 'linear-gradient(135deg, #06b6d4, #8b5cf6)',
                 color: 'white',
-                fontWeight: '600',
-                boxShadow: sessionActive
-                  ? '0 0 20px rgba(224, 64, 251, 0.6)'
-                  : '0 0 15px var(--border-glow)',
-                transition: 'all 0.3s ease',
-                animation: listening ? 'micPulse 1s infinite' : 'none',
+                fontWeight: '600'
               }}
             >
               {sessionActive ? '🔴' : '🎙️'}
             </button>
           </div>
 
-          {/* Live session timer (only while talking) */}
-          {sessionActive && (
-            <div
-              style={{
-                textAlign: 'center',
-                fontSize: '11px',
-                color: 'var(--color-cyan)',
-                paddingTop: '20px',
-              }}
-            >
-              🔴 Session: {formatDuration(sessionSeconds)}
-            </div>
-          )}
-
-          {/* Live speech stats during an active session */}
+          {/* Live Stats Bar */}
           {sessionActive && currentAnalysis && (
-            <div
-              style={{
-                padding: '6px 16px',
-                background: 'rgba(0,229,255,0.05)',
-                borderBottom: '1px solid var(--border-glow)',
-                display: 'flex',
-                gap: '16px',
-                fontSize: '11px',
-                color: 'var(--text-muted)',
-              }}
-            >
+            <div className="px-4 py-2 bg-cyan-500/5 border-b border-cyan-500/20 flex justify-between text-[11px] text-slate-400">
               <span>🎯 Fillers: {sessionFillerCount}</span>
               <span>📊 Quality: {currentAnalysis.quality}%</span>
-              <span>
-                ⏱️ Pace:{' '}
-                {currentAnalysis.pace === 'good'
-                  ? '✅'
-                  : currentAnalysis.pace === 'fast'
-                    ? '⚡ Fast'
-                    : '🐢 Slow'}
-              </span>
+              <span>⏱️ Pace: {currentAnalysis.pace === 'good' ? '✅' : currentAnalysis.pace === 'fast' ? '⚡' : '🐢'}</span>
               {pronScore && <span>🗣️ Pron: {pronScore}%</span>}
               {audioQuality && (
                 <span title={audioQuality.feedback}>
@@ -336,23 +229,11 @@ function PanelInner({
             </div>
           )}
 
-          {/* Slim single-line stats bar */}
-          <div
-            style={{
-              background: 'var(--bg-surface)',
-              borderTop: '1px solid var(--border-glow)',
-              padding: sessionActive ? '8px 16px 10px' : '14px 16px 10px',
-              display: 'flex',
-              justifyContent: 'space-around',
-              alignItems: 'center',
-              fontSize: '12px',
-              color: 'var(--text-muted)',
-            }}
-          >
+          {/* Global Stats */}
+          <div className="bg-slate-800 p-3 flex justify-around text-xs text-slate-400 border-t border-slate-700">
             <span>🔥 {streak}d</span>
-            <span>⭐ {stats.earnedXp}/{stats.totalXp}</span>
-            <span>💡 {tipsToday} tips today</span>
-            <span>📅 {user?.totalSessions ?? 0}</span>
+            <span>⭐ {stats.earnedXp}XP</span>
+            <span>💡 {tipsToday} tips</span>
           </div>
         </div>
       </aside>
