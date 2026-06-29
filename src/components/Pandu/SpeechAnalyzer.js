@@ -33,6 +33,7 @@ export function analyzeSpeech(transcript) {
   // Pace rating based on word count
   // Average spoken English = 130 words/min
   // In 8 seconds (our listen window) = ~17 words
+  // eslint-disable-next-line no-useless-assignment
   let pace = 'good'
   if (wordCount < 3) pace = 'too_short'
   else if (wordCount < 8) pace = 'slow'

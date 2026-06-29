@@ -12,12 +12,17 @@ export default function Home() {
 
   const [deferredPrompt, setDeferredPrompt] = useState(null)
   const [showInstallBanner, setShowInstallBanner] = useState(false)
+  const [installAttempted, setInstallAttempted] = useState(false)
 
   useEffect(() => {
     const handleBeforeInstall = (e) => {
-      e.preventDefault()
-      setDeferredPrompt(e)
-      setShowInstallBanner(true)
+      // Only prevent default if we haven't attempted to show it yet
+      // and the event hasn't been dispatched before
+      if (!installAttempted) {
+        e.preventDefault()
+        setDeferredPrompt(e)
+        setShowInstallBanner(true)
+      }
     }
     const handleInstalled = () => {
       setShowInstallBanner(false)
@@ -29,10 +34,11 @@ export default function Home() {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstall)
       window.removeEventListener('appinstalled', handleInstalled)
     }
-  }, [])
+  }, [installAttempted])
 
   const handleInstall = async () => {
     if (!deferredPrompt) return
+    setInstallAttempted(true)
     deferredPrompt.prompt()
     const result = await deferredPrompt.userChoice
     if (result.outcome === 'accepted') {

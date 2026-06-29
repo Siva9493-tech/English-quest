@@ -14,20 +14,11 @@ function formatTime(ts) {
   }
 }
 
-function formatDuration(secs) {
-  const m = Math.floor(secs / 60)
-    .toString()
-    .padStart(2, '0')
-  const s = (secs % 60).toString().padStart(2, '0')
-  return `${m}:${s}`
-}
-
 export default function PanduPanel({
   open,
   onClose,
   sessionActive,
   convState,
-  sessionSeconds,
   messages,
   onToggleSession,
   sessionFillerCount,
@@ -50,7 +41,6 @@ export default function PanduPanel({
       onClose={onClose}
       sessionActive={sessionActive}
       convState={convState}
-      sessionSeconds={sessionSeconds}
       messages={messages}
       onToggleSession={onToggleSession}
       sessionFillerCount={sessionFillerCount}
@@ -65,7 +55,6 @@ function PanelInner({
   onClose,
   sessionActive,
   convState,
-  sessionSeconds,
   messages,
   onToggleSession,
   sessionFillerCount,

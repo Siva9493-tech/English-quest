@@ -1,28 +1,31 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+
+function getInitialSummary() {
+  try {
+    const data = localStorage.getItem('lastSessionSummary')
+    return data ? JSON.parse(data) : null
+  } catch {
+    return null
+  }
+}
+
+function getInitialMilestones() {
+  try {
+    const mData = localStorage.getItem('ariaMilestones')
+    if (mData) {
+      const milestones = JSON.parse(mData)
+      localStorage.removeItem('ariaMilestones')
+      return milestones
+    }
+    return []
+  } catch {
+    return []
+  }
+}
 
 export default function SessionScorecard({ onClose }) {
-  const [summary, setSummary] = useState(null)
-  const [milestones, setMilestones] = useState([])
-
-  useEffect(() => {
-    try {
-      const data = localStorage.getItem('lastSessionSummary')
-      if (data) setSummary(JSON.parse(data))
-    } catch (e) {
-      console.error(e)
-    }
-
-    // Pull any milestone badges earned this session, then clear them.
-    try {
-      const mData = localStorage.getItem('ariaMilestones')
-      if (mData) {
-        setMilestones(JSON.parse(mData))
-        localStorage.removeItem('ariaMilestones')
-      }
-    } catch (e) {
-      console.error(e)
-    }
-  }, [])
+  const [summary] = useState(getInitialSummary)
+  const [milestones] = useState(getInitialMilestones)
 
   if (!summary) return null
 

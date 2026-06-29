@@ -5,7 +5,10 @@ const TEMPLATE_ID = import.meta.env.VITE_EMAILJS_TEMPLATE_ID;
 const PUBLIC_KEY = import.meta.env.VITE_EMAILJS_PUBLIC_KEY;
 
 export async function sendReminderEmail(userData, streak) {
-  if (!userData?.email || !SERVICE_ID) return;
+  if (!userData?.email || !SERVICE_ID || !TEMPLATE_ID || !PUBLIC_KEY) {
+    console.warn('Email reminder skipped: missing EmailJS configuration');
+    return;
+  }
 
   const messages = [
     'Your English journey continues today!',
@@ -31,8 +34,13 @@ export async function sendReminderEmail(userData, streak) {
     );
     console.log('Reminder email sent!');
     localStorage.setItem('lastReminderDate', new Date().toDateString());
-  } catch (err) {
-    console.error('Email failed:', err);
+} catch (err) {
+    const msg = err?.message || String(err);
+    if (msg.includes('public key') || msg.includes('Public key')) {
+      console.error('EmailJS Error: Public key is required. Please verify VITE_EMAILJS_PUBLIC_KEY in .env');
+    } else {
+      console.error('Email failed:', err);
+    }
   }
 }
 

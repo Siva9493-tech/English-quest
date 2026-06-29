@@ -9,7 +9,6 @@ import { ariaSpeak, stopAria } from './AriaVoice'
 import { askPandu, setConversationMode } from './PanduGemini'
 import {
   pickPracticeType,
-  getPracticeScenario,
   buildPracticeOpening,
   askAriaPractice,
   getPracticeSummary,
@@ -112,10 +111,19 @@ export default function Pandu() {
   // Current module ID for practice scenarios.
   const moduleIdRef = useRef(null)
 
+  // Random feedback selector (avoids calling Math.random in render)
+  const pickRandomFeedback = useRef(
+    (arr) => arr[Math.floor(Math.random() * arr.length)] || null
+  ).current
+
+  // Track if mic start has been logged for current session
+  const micStartLoggedRef = useRef(false)
+
   // Clean up voice + recognition on unmount.
   useEffect(() => {
     return () => {
       sessionRef.current = false
+      micStartLoggedRef.current = false
       stopAria()
       try {
         recognitionRef.current?.abort()
@@ -289,7 +297,10 @@ export default function Pandu() {
       try {
         recognition.start()
         startRecording()
-        console.log('Aria mic started - waiting for speech...')
+        if (!micStartLoggedRef.current) {
+          micStartLoggedRef.current = true
+          console.log('Aria mic started - waiting for speech...')
+        }
       } catch {
         finish('')
       }
@@ -372,8 +383,7 @@ export default function Pandu() {
       // Only weave ONE feedback note into Aria's reply per turn, picked
       // at random so tips alternate between speech and pronunciation.
       const allFeedback = [speechFeedback, pronTip].filter(Boolean)
-      const feedbackToSend =
-        allFeedback[Math.floor(Math.random() * allFeedback.length)] || null
+      const feedbackToSend = pickRandomFeedback(allFeedback)
 
       setConvState(STATES.PROCESSING)
       const stats = getStats()
@@ -533,10 +543,10 @@ export default function Pandu() {
   async function endSession(farewell) {
     if (!sessionRef.current && !sessionActive) return
     sessionRef.current = false
+    micStartLoggedRef.current = false
     // Capture the practiced topic before clearing it — memory needs it below.
     const sessionTopic = selectedTopicRef.current
     const practiceType = practiceTypeRef.current
-    const moduleId = moduleIdRef.current
     const isPracticeMode = !!practiceType
     
     selectedTopicRef.current = null

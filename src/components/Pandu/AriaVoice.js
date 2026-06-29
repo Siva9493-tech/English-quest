@@ -1,22 +1,13 @@
 // AriaVoice.js
 // Human-sounding TTS for Aria
-// Priority: ElevenLabs → Kokoro-82M v1.0 →
-// best available browser voice
+// Priority: Google Cloud TTS (via /api/speak) -> ElevenLabs (via /api/speak) -> Kokoro-82M v1.0 -> best available browser voice
 
 let kokoroPipeline = null;
 let kokoroLoading = false;
 let kokoroFailed = false;
-let currentUtterance = null;
-
-// ─── ELEVENLABS (PRIMARY) ──────────────────────
-// The API key lives server-side; the browser talks to our /api/speak proxy.
-// VOICE_ID is not secret, so it can still come from a build-time env var.
-const VOICE_ID =
-  import.meta.env.VITE_ELEVENLABS_VOICE_ID || 'EXAVITQu4vr4xnSDxMaL'; // Sarah (premade)
 
 // Track monthly character usage to stay under the free tier limit
 function checkElevenLabsBudget(text) {
-  // Reset counter when the month changes
   const thisMonth = String(new Date().getMonth());
   const lastReset = localStorage.getItem('elevenLabsReset');
   if (lastReset !== thisMonth) {
@@ -24,40 +15,33 @@ function checkElevenLabsBudget(text) {
     localStorage.setItem('elevenLabsReset', thisMonth);
   }
 
-  const charCount = parseInt(
-    localStorage.getItem('elevenLabsChars') || '0',
-    10,
-  );
+  const charCount = parseInt(localStorage.getItem('elevenLabsChars') || '0', 10);
 
   if (charCount + text.length > 9000) {
-    // Near the limit — skip to Kokoro
     throw new Error('Monthly limit approaching');
   }
 
   localStorage.setItem('elevenLabsChars', String(charCount + text.length));
 }
 
-async function elevenLabsSpeak(text) {
+async function serverTTSSpeak(text) {
   checkElevenLabsBudget(text);
 
   const response = await fetch('/api/speak', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      text,
-      voiceId: VOICE_ID,
-      voice_settings: {
-        stability: 0.5,
-        similarity_boost: 0.8,
-        style: 0.3,
-        use_speaker_boost: true,
-      },
-    }),
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text }),
   });
 
-  if (!response.ok) throw new Error('ElevenLabs failed');
+  if (!response.ok) {
+    if (response.status === 502) {
+      const data = await response.json().catch(() => ({}));
+      if (data.fallback === 'browser') {
+        throw new Error('TTS failed, fallback to browser');
+      }
+    }
+    throw new Error('Server TTS failed');
+  }
 
   const audioBlob = await response.blob();
   const audioUrl = URL.createObjectURL(audioBlob);
@@ -76,7 +60,6 @@ async function elevenLabsSpeak(text) {
   });
 }
 
-// ─── KOKORO INIT ───────────────────────────────
 async function initKokoro() {
   if (kokoroPipeline) return kokoroPipeline;
   if (kokoroLoading) return null;
@@ -104,18 +87,22 @@ async function initKokoro() {
   } catch (err) {
     kokoroLoading = false;
     kokoroFailed = true;
-    console.warn('Aria: Kokoro failed →', err.message);
+    const msg = err?.message || String(err);
+    if (msg.includes('401') || msg.includes('Unauthorized') || msg.includes('authentication') || msg.includes('403') || msg.includes('Forbidden') || msg.includes('gated')) {
+      console.warn('Aria: Kokoro model is gated/requires auth, falling back to browser TTS');
+    } else {
+      console.warn('Aria: Kokoro failed:', msg);
+    }
     return null;
   }
 }
 
-// ─── KOKORO SPEAK ──────────────────────────────
 async function kokoroSpeak(text) {
   const tts = await initKokoro();
   if (!tts) throw new Error('Kokoro not available');
 
   const result = await tts(text, {
-    voice: 'af_heart', // warm American female
+    voice: 'af_heart',
     speed: 0.92,
   });
 
@@ -135,7 +122,6 @@ async function kokoroSpeak(text) {
   });
 }
 
-// ─── BROWSER TTS FALLBACK ──────────────────────
 function getBestBrowserVoice() {
   const voices = window.speechSynthesis.getVoices();
 
@@ -156,7 +142,6 @@ function getBestBrowserVoice() {
     if (match) return match;
   }
 
-  // Last resort: any female or English voice
   return (
     voices.find((v) => v.name.toLowerCase().includes('female')) ||
     voices.find((v) => v.lang?.startsWith('en')) ||
@@ -170,7 +155,6 @@ function browserSpeak(text) {
 
     const utterance = new SpeechSynthesisUtterance(text);
 
-    // Wait for voices to load if needed
     const setVoice = () => {
       utterance.voice = getBestBrowserVoice();
       utterance.rate = 0.88;
@@ -186,55 +170,49 @@ function browserSpeak(text) {
 
     utterance.onend = resolve;
     utterance.onerror = resolve;
-    currentUtterance = utterance;
 
     window.speechSynthesis.speak(utterance);
   });
 }
 
-// ─── CLEAN TEXT FOR SPEECH ─────────────────────
 function cleanForSpeech(text) {
   return (
     text
-      // Remove correction brackets
       .replace(/\[💡[^\]]*\]/g, '')
       .replace(/\[🎯[^\]]*\]/g, '')
       .replace(/\[⭐[^\]]*\]/g, '')
       .replace(/\[📊[^\]]*\]/g, '')
       .replace(/\[💬[^\]]*\]/g, '')
       .replace(/\[⏱️[^\]]*\]/g, '')
-      // Remove markdown
       .replace(/\*\*/g, '')
       .replace(/\*/g, '')
       .replace(/_/g, '')
-      // Remove emoji clusters
       .replace(/[\u{1F300}-\u{1F9FF}]/gu, '')
       .trim()
   );
 }
 
-// ─── MAIN EXPORT ───────────────────────────────
 export async function ariaSpeak(text) {
   if (!text || text.trim() === '') return;
 
   const clean = cleanForSpeech(text);
   if (!clean) return;
 
-  // 1) Try ElevenLabs first (best quality)
+  // 1) Try server TTS first (Google Cloud TTS -> ElevenLabs)
   try {
-    await elevenLabsSpeak(clean);
+    await serverTTSSpeak(clean);
     return;
   } catch (err) {
-    console.warn('Aria: ElevenLabs unavailable →', err.message);
+    console.warn('Aria: Server TTS unavailable:', err.message);
   }
 
-  // 2) Fall back to Kokoro (good quality)
+  // 2) Fall back to Kokoro (good quality, local)
   try {
     if (!kokoroFailed) {
       await kokoroSpeak(clean);
       return;
     }
-  } catch (err) {
+  } catch {
     console.warn('Aria: Kokoro speak failed, using browser TTS');
     kokoroFailed = true;
   }
@@ -243,28 +221,20 @@ export async function ariaSpeak(text) {
   await browserSpeak(clean);
 }
 
-// Stop any current speech
 export function stopAria() {
   window.speechSynthesis.cancel();
-  currentUtterance = null;
 }
 
-// Preload Kokoro in background on app start
-// so first message plays instantly
 export function preloadAriaVoice() {
-  // Only preload if not already done
   const alreadyLoaded = localStorage.getItem('ariaVoiceLoaded');
 
   if (!alreadyLoaded) {
-    // Delay preload by 3 seconds so app
-    // loads fast first
     setTimeout(() => {
       initKokoro().catch(() => {
         console.log('Aria: Will use browser voice');
       });
     }, 3000);
   } else {
-    // Already cached — load immediately
     initKokoro().catch(() => {});
   }
 }

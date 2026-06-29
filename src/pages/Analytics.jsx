@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { getStats, getModuleStats, getStreak } from '../utils/progress';
 import { getAriaMemory } from '../components/Pandu/AriaMemory';
 import { getPanduUser } from '../components/Pandu/PanduMemory';
 import { getSessions, getCorrections } from '../utils/database';
-import { getUserAccent, setUserAccent } from '../components/Pandu/AccentTrainer';
+import { getUserAccent } from '../components/Pandu/AccentTrainer';
 import { remindersEnabled } from '../utils/emailReminder';
 import { generateShareCard } from '../utils/shareCard';
 
@@ -91,11 +91,14 @@ export default function Analytics() {
   const userData = getPanduUser();
   const accent = getUserAccent();
 
+  // Base date for heatmap (computed once per render to avoid impure Date.now in render)
+  const baseDate = useMemo(() => new Date(), []);
+
   // Build calendar heatmap data (last 30 days)
-  const getHeatmapData = () => {
+  const heatmap = useMemo(() => {
     const days = [];
     for (let i = 29; i >= 0; i--) {
-      const date = new Date(Date.now() - i * 86400000);
+      const date = new Date(baseDate.getTime() - i * 86400000);
       const dateStr = date.toDateString();
       const session = sessions.find(
         s => s.date === dateStr
@@ -111,10 +114,10 @@ export default function Analytics() {
       });
     }
     return days;
-  };
+  }, [baseDate, sessions]);
 
   // Get top mistakes
-  const getTopMistakes = () => {
+  const topMistakes = useMemo(() => {
     const counts = {};
     corrections.forEach(c => {
       if (c.wrong) {
@@ -125,10 +128,10 @@ export default function Analytics() {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
       .map(([word, count]) => ({ word, count }));
-  };
+  }, [corrections]);
 
   // Get weekly XP trend (last 7 sessions)
-  const getWeeklyTrend = () => {
+  const weeklyTrend = useMemo(() => {
     return sessions
       .slice(-7)
       .map((s, i) => ({
@@ -137,11 +140,7 @@ export default function Analytics() {
         words: s.totalWords || 0,
         grade: s.fluencyGrade?.grade || 'N/A',
       }));
-  };
-
-  const heatmap = getHeatmapData();
-  const topMistakes = getTopMistakes();
-  const weeklyTrend = getWeeklyTrend();
+  }, [sessions]);
 
   const totalModulesDone = moduleStats.filter(
     m => m.isComplete
