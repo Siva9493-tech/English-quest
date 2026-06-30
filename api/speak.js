@@ -25,8 +25,8 @@ async function googleTTS(text) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         input: { text },
-        voice: { languageCode: 'en-US', name: 'en-US-Neural2-F' },
-        audioConfig: { audioEncoding: 'MP3', speakingRate: 0.95, pitch: 1.0 },
+        voice: { languageCode: 'en-US', name: 'en-US-Journey-F' },
+        audioConfig: { audioEncoding: 'MP3', speakingRate: 0.92, pitch: 2.0 },
       }),
     },
   );
@@ -106,6 +106,7 @@ export default async function handler(req, res) {
     console.log('[TTS] Using provider: google');
     res.setHeader('Content-Type', 'audio/mpeg');
     res.setHeader('X-TTS-Provider', 'google');
+    res.setHeader('X-TTS-Voice', 'en-US-Journey-F');
     return res.send(buffer);
   } catch (err) {
     console.warn('[TTS] Google TTS failed:', err.message);
@@ -117,6 +118,7 @@ export default async function handler(req, res) {
     console.log('[TTS] Using provider: elevenlabs');
     res.setHeader('Content-Type', 'audio/mpeg');
     res.setHeader('X-TTS-Provider', 'elevenlabs');
+    res.setHeader('X-TTS-Voice', 'Sarah (EXAVITQu4vr4xnSDxMaL)');
     return res.send(buffer);
   } catch (err) {
     console.warn('[TTS] ElevenLabs failed:', err.message);
