@@ -14,9 +14,20 @@ async function fetchWithTimeout(url, options, timeoutMs = PROVIDER_TIMEOUT_MS) {
   }
 }
 
-async function googleTTS(text) {
+async function googleTTS(text, accent) {
   const key = process.env.GOOGLE_TTS_API_KEY;
   if (!key) throw new Error('GOOGLE_TTS_API_KEY not configured');
+
+  // British: slower, deliberate pace for learning; American: fluent, natural pace
+  const isBritish = accent === 'british';
+
+  const voiceConfig = isBritish
+    ? { languageCode: 'en-GB', name: 'en-GB-Neural2-F' }
+    : { languageCode: 'en-US', name: 'en-US-Journey-F' };
+
+  const audioConfig = isBritish
+    ? { audioEncoding: 'MP3', speakingRate: 0.82, pitch: 1.5 }
+    : { audioEncoding: 'MP3', speakingRate: 0.95, pitch: 2.0 };
 
   const response = await fetchWithTimeout(
     `https://texttospeech.googleapis.com/v1/text:synthesize?key=${key}`,
@@ -25,8 +36,8 @@ async function googleTTS(text) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         input: { text },
-        voice: { languageCode: 'en-US', name: 'en-US-Journey-F' },
-        audioConfig: { audioEncoding: 'MP3', speakingRate: 0.92, pitch: 2.0 },
+        voice: voiceConfig,
+        audioConfig,
       }),
     },
   );
@@ -94,7 +105,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const { text, voiceId, voice_settings } = req.body || {};
+  const { text, voiceId, voice_settings, accent } = req.body || {};
 
   if (!text || typeof text !== 'string') {
     return res.status(400).json({ error: 'No text provided' });
@@ -102,11 +113,12 @@ export default async function handler(req, res) {
 
   // 1. Try Google Cloud TTS FIRST (primary - free tier generous)
   try {
-    const buffer = await googleTTS(text);
-    console.log('[TTS] Using provider: google');
+    const buffer = await googleTTS(text, accent);
+    const voiceName = accent === 'british' ? 'en-GB-Neural2-F' : 'en-US-Journey-F';
+    console.log(`[TTS] Using provider: google | accent: ${accent || 'american'} | voice: ${voiceName}`);
     res.setHeader('Content-Type', 'audio/mpeg');
     res.setHeader('X-TTS-Provider', 'google');
-    res.setHeader('X-TTS-Voice', 'en-US-Journey-F');
+    res.setHeader('X-TTS-Voice', voiceName);
     return res.send(buffer);
   } catch (err) {
     console.warn('[TTS] Google TTS failed:', err.message);
